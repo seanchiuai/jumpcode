@@ -9,11 +9,13 @@
     "orchestrator",
     "frontend-lead",
     "backend-lead",
-    "qa-lead"
+    "qa-lead",
+    "devops-lead",
+    "mcp-lead"
   ],
   "routing": {
     "human_or_hermes": ["orchestrator"],
-    "orchestrator": ["frontend-lead", "backend-lead", "qa-lead"],
+    "orchestrator": ["frontend-lead", "backend-lead", "qa-lead", "devops-lead", "mcp-lead"],
     "leads": ["orchestrator"]
   },
   "canonical_state": [
@@ -23,6 +25,16 @@
     "orchestrator": ".agent-cockpit/roles/orchestrator.md",
     "frontend-lead": ".agent-cockpit/roles/frontend-lead.md",
     "backend-lead": ".agent-cockpit/roles/backend-lead.md",
-    "qa-lead": ".agent-cockpit/roles/qa-lead.md"
+    "qa-lead": ".agent-cockpit/roles/qa-lead.md",
+    "devops-lead": ".agent-cockpit/roles/devops-lead.md",
+    "mcp-lead": ".agent-cockpit/roles/mcp-lead.md"
+  },
+  "role_emojis": {
+    "orchestrator": "🧭",
+    "frontend-lead": "🎨",
+    "backend-lead": "🛠",
+    "qa-lead": "✅",
+    "devops-lead": "🚀",
+    "mcp-lead": "🔌"
   }
 }

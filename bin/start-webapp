@@ -62,23 +62,39 @@ ws = json.load(open(sys.argv[1]))
 print(ws.get("role_prompts", {}).get("orchestrator", ".agent-cockpit/roles/orchestrator.md"))
 PY
 )
+# Every role label carries an emoji (a workspace convention). Configured ones win; any
+# lead without one gets a distinct fallback so the requirement always holds.
+ORCH_EMOJI=$(python3 - "$WS_JSON" <<'PY'
+import json, sys
+ws = json.load(open(sys.argv[1]))
+print(ws.get("role_emojis", {}).get("orchestrator", "🧭"))
+PY
+)
 
 # Build the lead list in declaration order, excluding orchestrator/hermes/human.
-LEAD_ROLES=(); LEAD_PROMPTS=()
-while IFS=$'\t' read -r role pf; do
+# Each line is: role <TAB> prompt_file <TAB> emoji
+LEAD_ROLES=(); LEAD_PROMPTS=(); LEAD_EMOJIS=()
+while IFS=$'\t' read -r role pf emoji; do
   [[ -z "$role" ]] && continue
-  LEAD_ROLES+=("$role"); LEAD_PROMPTS+=("$pf")
+  LEAD_ROLES+=("$role"); LEAD_PROMPTS+=("$pf"); LEAD_EMOJIS+=("$emoji")
 done < <(python3 - "$WS_JSON" <<'PY'
 import json, sys
 ws = json.load(open(sys.argv[1]))
 prompts = ws.get("role_prompts", {})
+emojis = ws.get("role_emojis", {})
+pool = ["🧩", "📦", "🔭", "🛰", "🧪", "⚙", "📚", "🧰", "🔬", "🗂"]
 order = list(prompts.keys()) + list(ws.get("default_participants", []))
 seen = set()
+fb = 0
 for role in order:
     if role in ("hermes", "human", "orchestrator") or role in seen:
         continue
     seen.add(role)
-    print("%s\t%s" % (role, prompts.get(role, ".agent-cockpit/roles/%s.md" % role)))
+    em = emojis.get(role)
+    if not em:
+        em = pool[fb % len(pool)]
+        fb += 1
+    print("%s\t%s\t%s" % (role, prompts.get(role, ".agent-cockpit/roles/%s.md" % role), em))
 PY
 )
 
@@ -90,24 +106,24 @@ ORCH=$(tmux new-session -d -P -F '#{pane_id}' -s "$SESSION" -n roles -c "$ROOT" 
 LEFT_PANES=()
 PREV=""
 for i in "${!LEAD_ROLES[@]}"; do
-  role="${LEAD_ROLES[$i]}"; pf="${LEAD_PROMPTS[$i]}"
+  role="${LEAD_ROLES[$i]}"; pf="${LEAD_PROMPTS[$i]}"; emoji="${LEAD_EMOJIS[$i]}"
   if [[ -z "$PREV" ]]; then
     pane=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" "$(agent_cmd "$role" "$pf")")
   else
     pane=$(tmux split-window -P -F '#{pane_id}' -t "$PREV" -v -c "$ROOT" "$(agent_cmd "$role" "$pf")")
   fi
-  tmux select-pane -t "$pane" -T "$role"
-  # @role = human-facing border label (the domain only, no fixed slot).
+  tmux select-pane -t "$pane" -T "$emoji $role"
+  # @role = human-facing border label (emoji + domain, no fixed slot).
   # @cockpit_role = machine id that wake_pane targets.
-  tmux set-option -pt "$pane" @role "$role"
+  tmux set-option -pt "$pane" @role "$emoji $role"
   tmux set-option -pt "$pane" @cockpit_role "$role"
   LEFT_PANES+=("$pane")
   PREV="$pane"
 done
 
 # Orchestrator labels (the one role tied to a position: it owns the right column).
-tmux select-pane -t "$ORCH" -T "orchestrator"
-tmux set-option -pt "$ORCH" @role "🧭 orchestrator · owns this column"
+tmux select-pane -t "$ORCH" -T "$ORCH_EMOJI orchestrator"
+tmux set-option -pt "$ORCH" @role "$ORCH_EMOJI orchestrator · owns this column"
 tmux set-option -pt "$ORCH" @cockpit_role "orchestrator"
 
 # Give the orchestrator ~55% width, then even out the left stack.

@@ -6,15 +6,23 @@ canonical terms see [`../../CONTEXT.md`](../../CONTEXT.md); for the decisions se
 
 ## Purpose
 
-Coordinate development of web applications through a visible, accountable team:
+Coordinate development of web applications through a visible, accountable team. The set
+of leads is **whatever this workspace declares** in `workspace.json` (any number, any
+domain) — only the orchestrator is fixed. The current team:
 
 ```text
 Sean / Hermes
-  -> orchestrator
-      -> frontend-lead
-      -> backend-lead
-      -> qa-lead
+  -> 🧭 orchestrator
+      -> 🎨 frontend-lead
+      -> 🛠 backend-lead
+      -> ✅ qa-lead
+      -> 🚀 devops-lead
+      -> 🔌 mcp-lead
 ```
+
+To change the team, edit `default_participants` / `routing` / `role_prompts` /
+`role_emojis` in `workspace.json`, add the lead's charter under `../../roles/`, and
+relaunch.
 
 Leads may invoke general, repo-agnostic Claude Code **subagents** as a tool, but only the
 orchestrator and leads are durable cockpit panes. Hermes drives the orchestrator only;
@@ -23,8 +31,8 @@ Sean may type into any pane.
 The visible cockpit uses one tmux session with two windows:
 
 ```text
-roles    four Claude Code role panes only
-         left column: frontend-lead / backend-lead / qa-lead
+roles    one Claude Code pane per role
+         left column: the workspace's leads, stacked (count/order follow workspace.json)
          right side: orchestrator, full height
 monitor  feed + status logs, available but not stealing role-pane space
 ```
@@ -33,6 +41,10 @@ The orchestrator is always on the **right side**. Each pane carries a stable
 `@cockpit_role` option (e.g. `orchestrator`, `backend-lead`) — that is how `dispatch`
 targets a pane for a wake. Claude overwrites visible pane titles, so wake targeting never
 relies on the title; a human-readable `@role` border label is shown for people.
+
+**Every role label carries an emoji** (convention). Set one per role in
+`workspace.json` `role_emojis`; any lead without one is auto-assigned a distinct fallback
+so the requirement always holds.
 
 Switch windows with `Ctrl-b n` / `Ctrl-b p`, or attach directly:
 
@@ -66,6 +78,8 @@ Role charters + shared protocol:
 /Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/frontend-lead.md
 /Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/backend-lead.md
 /Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/qa-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/devops-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/mcp-lead.md
 ```
 
 ## Operating rules
