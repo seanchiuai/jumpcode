@@ -104,26 +104,50 @@ PY
 # fail once there are several leads.)
 ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${COCKPIT_COLS:-260}" -y "${COCKPIT_ROWS:-72}" -s "$SESSION" -n roles -c "$ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT")")
 
-# Lead panes: the first opens the left column; each subsequent one stacks below the
-# previous. Order and count follow the workspace; positions are incidental, not roles.
-LEFT_PANES=()
-PREV=""
-for i in "${!LEAD_ROLES[@]}"; do
-  role="${LEAD_ROLES[$i]}"; pf="${LEAD_PROMPTS[$i]}"; emoji="${LEAD_EMOJIS[$i]}"
-  if [[ -z "$PREV" ]]; then
-    pane=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" "$(agent_cmd "$role" "$pf")") \
-      || { echo "warn: no room for lead '$role' — skipping (increase COCKPIT_ROWS)" >&2; continue; }
-  else
-    pane=$(tmux split-window -P -F '#{pane_id}' -t "$PREV" -v -c "$ROOT" "$(agent_cmd "$role" "$pf")") \
-      || { echo "warn: no room for lead '$role' — skipping (increase COCKPIT_ROWS)" >&2; continue; }
-  fi
-  tmux select-pane -t "$pane" -T "$emoji $role"
-  # @role = human-facing border label (emoji + domain, no fixed slot).
-  # @cockpit_role = machine id that wake_pane targets.
-  tmux set-option -pt "$pane" @role "$emoji $role"
-  tmux set-option -pt "$pane" @cockpit_role "$role"
-  LEFT_PANES+=("$pane")
-  PREV="$pane"
+# Lead panes laid out in COLUMNS of at most MAX_PER_COL, to the LEFT of the orchestrator.
+# No column holds more than MAX_PER_COL panes; with more leads we add another column
+# instead of a taller stack. Order is left->right then top->bottom, in workspace order.
+# Only the orchestrator's right-column ownership is fixed; lead positions are incidental.
+MAX_PER_COL="${COCKPIT_MAX_PER_COL:-3}"
+N=${#LEAD_ROLES[@]}
+LEAD_PANE=()        # LEAD_PANE[i] = pane id for lead i (parallel to LEAD_ROLES)
+COL_HEADS=()        # head (top) pane of each lead column
+NCOLS=0
+if (( N > 0 )); then NCOLS=$(( (N + MAX_PER_COL - 1) / MAX_PER_COL )); fi
+
+# 1) Column heads: each split is inserted just left of the orchestrator, so columns end
+#    up ordered [col0][col1]...[orchestrator] left-to-right.
+for (( c=0; c<NCOLS; c++ )); do
+  idx=$(( c * MAX_PER_COL ))
+  head=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" \
+           "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}")") \
+    || { echo "warn: no room for lead column $c — raise COCKPIT_COLS" >&2; continue; }
+  LEAD_PANE[$idx]=$head
+  COL_HEADS[$c]=$head
+done
+
+# 2) Stack the remaining leads (rows 1..MAX-1) under each column head.
+for (( c=0; c<NCOLS; c++ )); do
+  prev="${COL_HEADS[$c]:-}"
+  [[ -z "$prev" ]] && continue
+  for (( r=1; r<MAX_PER_COL; r++ )); do
+    idx=$(( c * MAX_PER_COL + r ))
+    if (( idx >= N )); then break; fi
+    pane=$(tmux split-window -P -F '#{pane_id}' -t "$prev" -v -c "$ROOT" \
+             "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}")") \
+      || { echo "warn: no room for lead '${LEAD_ROLES[$idx]}' — raise COCKPIT_ROWS" >&2; continue; }
+    LEAD_PANE[$idx]=$pane
+    prev=$pane
+  done
+done
+
+# 3) Label every lead pane (emoji + role; @cockpit_role is the wake-target machine id).
+for (( i=0; i<N; i++ )); do
+  p="${LEAD_PANE[$i]:-}"
+  [[ -z "$p" ]] && continue
+  tmux select-pane -t "$p" -T "${LEAD_EMOJIS[$i]} ${LEAD_ROLES[$i]}"
+  tmux set-option -pt "$p" @role "${LEAD_EMOJIS[$i]} ${LEAD_ROLES[$i]}"
+  tmux set-option -pt "$p" @cockpit_role "${LEAD_ROLES[$i]}"
 done
 
 # Orchestrator labels (the one role tied to a position: it owns the right column).
@@ -131,13 +155,22 @@ tmux select-pane -t "$ORCH" -T "$ORCH_EMOJI orchestrator"
 tmux set-option -pt "$ORCH" @role "$ORCH_EMOJI orchestrator · owns this column"
 tmux set-option -pt "$ORCH" @cockpit_role "orchestrator"
 
-# Give the orchestrator ~55% width, then even out the left stack.
-WINDOW_WIDTH=$(tmux display-message -p -t "$SESSION:roles" '#{window_width}' 2>/dev/null || echo 160)
-tmux resize-pane -t "$ORCH" -x "$(( WINDOW_WIDTH * 55 / 100 ))" >/dev/null 2>&1 || true
-if (( ${#LEFT_PANES[@]} > 1 )); then
-  WIN_H=$(tmux display-message -p -t "$SESSION:roles" '#{window_height}' 2>/dev/null || echo 40)
-  per=$(( WIN_H / ${#LEFT_PANES[@]} ))
-  for p in "${LEFT_PANES[@]}"; do tmux resize-pane -t "$p" -y "$per" >/dev/null 2>&1 || true; done
+# Even the column widths (orchestrator + NCOLS lead columns), then even rows per column.
+WINDOW_WIDTH=$(tmux display-message -p -t "$SESSION:roles" '#{window_width}' 2>/dev/null || echo 200)
+WIN_H=$(tmux display-message -p -t "$SESSION:roles" '#{window_height}' 2>/dev/null || echo 50)
+if (( NCOLS > 0 )); then
+  col_w=$(( WINDOW_WIDTH / (NCOLS + 1) ))
+  for (( c=0; c<NCOLS; c++ )); do
+    [[ -n "${COL_HEADS[$c]:-}" ]] && tmux resize-pane -t "${COL_HEADS[$c]}" -x "$col_w" >/dev/null 2>&1 || true
+    rows=$(( N - c * MAX_PER_COL )); if (( rows > MAX_PER_COL )); then rows=$MAX_PER_COL; fi
+    if (( rows > 1 )); then
+      per=$(( WIN_H / rows ))
+      for (( r=0; r<rows; r++ )); do
+        p="${LEAD_PANE[$(( c * MAX_PER_COL + r ))]:-}"
+        [[ -n "$p" ]] && tmux resize-pane -t "$p" -y "$per" >/dev/null 2>&1 || true
+      done
+    fi
+  done
 fi
 
 tmux set-option -w -t "$SESSION:roles" pane-border-status top >/dev/null
@@ -169,8 +202,9 @@ send_initial() {
 }
 
 send_initial "$ORCH" orchestrator "$ORCH_PROMPT"
-for i in "${!LEAD_ROLES[@]}"; do
-  send_initial "${LEFT_PANES[$i]}" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}"
+for (( i=0; i<N; i++ )); do
+  p="${LEAD_PANE[$i]:-}"
+  [[ -n "$p" ]] && send_initial "$p" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}"
 done
 
 # Open visible iTerm window if available. If Automation permissions block this, tmux still runs.
