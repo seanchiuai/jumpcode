@@ -45,32 +45,80 @@ EOF
 feed_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; printf "\\033]2;feed\\033\\\\"; touch .agent-cockpit/shared/conversation.log; clear; echo "conversation feed (press Ctrl-b n/p to switch windows)"; tail -n 120 -f .agent-cockpit/shared/conversation.log'
 status_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; printf "\\033]2;status\\033\\\\"; while true; do clear; echo "cockpit status (updates every 5s)"; date; ./.agent-cockpit/bin/status || true; sleep 5; done'
 
-# Main window: only the four accountable Claude Code roles.
-# Layout convention: orchestrator is always the full-height RIGHT pane.
-# Leads are stacked vertically on the LEFT.
-ORCH=$(tmux new-session -d -P -F '#{pane_id}' -s "$SESSION" -n roles -c "$ROOT" "$(agent_cmd orchestrator .agent-cockpit/roles/orchestrator.md)")
-FRONT=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" "$(agent_cmd frontend-lead .agent-cockpit/roles/frontend-lead.md)")
-BACK=$(tmux split-window -P -F '#{pane_id}' -t "$FRONT" -v -c "$ROOT" "$(agent_cmd backend-lead .agent-cockpit/roles/backend-lead.md)")
-QA=$(tmux split-window -P -F '#{pane_id}' -t "$BACK" -v -c "$ROOT" "$(agent_cmd qa-lead .agent-cockpit/roles/qa-lead.md)")
+# The ONLY fixed rule: the orchestrator owns the full-height RIGHT column. The team
+# leads that fill the LEFT column are whatever THIS workspace declares — any number,
+# any domain — read live from its workspace.json. Nothing here hardcodes specific leads;
+# to change the team, edit the workspace's role_prompts/default_participants and relaunch.
+WORKSPACE="${COCKPIT_WORKSPACE:-webapp}"
+WS_JSON=".agent-cockpit/workspaces/$WORKSPACE/workspace.json"
+if [[ ! -f "$WS_JSON" ]]; then
+  echo "workspace config not found: $WS_JSON" >&2
+  exit 1
+fi
 
-WINDOW_WIDTH=$(tmux display-message -p -t "$SESSION:roles" '#{window_width}' 2>/dev/null || echo 160)
-ORCH_WIDTH=$(( WINDOW_WIDTH * 55 / 100 ))
-tmux resize-pane -t "$ORCH" -x "$ORCH_WIDTH" >/dev/null 2>&1 || true
+ORCH_PROMPT=$(python3 - "$WS_JSON" <<'PY'
+import json, sys
+ws = json.load(open(sys.argv[1]))
+print(ws.get("role_prompts", {}).get("orchestrator", ".agent-cockpit/roles/orchestrator.md"))
+PY
+)
 
-tmux select-pane -t "$ORCH" -T "ORCHESTRATOR — RIGHT"
-tmux select-pane -t "$FRONT" -T "FRONTEND LEAD — left top"
-tmux select-pane -t "$BACK" -T "BACKEND LEAD — left middle"
-tmux select-pane -t "$QA" -T "QA LEAD — left bottom"
-tmux set-option -pt "$ORCH" @role "🧭 ORCHESTRATOR — RIGHT SIDE"
-tmux set-option -pt "$FRONT" @role "🎨 FRONTEND LEAD — LEFT TOP"
-tmux set-option -pt "$BACK" @role "🛠 BACKEND LEAD — LEFT MIDDLE"
-tmux set-option -pt "$QA" @role "✅ QA LEAD — LEFT BOTTOM"
-# Machine-readable role id for wake targeting. The pretty @role above is for humans;
-# Claude overwrites pane titles, so wake_pane targets @cockpit_role instead.
+# Build the lead list in declaration order, excluding orchestrator/hermes/human.
+LEAD_ROLES=(); LEAD_PROMPTS=()
+while IFS=$'\t' read -r role pf; do
+  [[ -z "$role" ]] && continue
+  LEAD_ROLES+=("$role"); LEAD_PROMPTS+=("$pf")
+done < <(python3 - "$WS_JSON" <<'PY'
+import json, sys
+ws = json.load(open(sys.argv[1]))
+prompts = ws.get("role_prompts", {})
+order = list(prompts.keys()) + list(ws.get("default_participants", []))
+seen = set()
+for role in order:
+    if role in ("hermes", "human", "orchestrator") or role in seen:
+        continue
+    seen.add(role)
+    print("%s\t%s" % (role, prompts.get(role, ".agent-cockpit/roles/%s.md" % role)))
+PY
+)
+
+# Orchestrator pane: the fixed right column.
+ORCH=$(tmux new-session -d -P -F '#{pane_id}' -s "$SESSION" -n roles -c "$ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT")")
+
+# Lead panes: the first opens the left column; each subsequent one stacks below the
+# previous. Order and count follow the workspace; positions are incidental, not roles.
+LEFT_PANES=()
+PREV=""
+for i in "${!LEAD_ROLES[@]}"; do
+  role="${LEAD_ROLES[$i]}"; pf="${LEAD_PROMPTS[$i]}"
+  if [[ -z "$PREV" ]]; then
+    pane=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" "$(agent_cmd "$role" "$pf")")
+  else
+    pane=$(tmux split-window -P -F '#{pane_id}' -t "$PREV" -v -c "$ROOT" "$(agent_cmd "$role" "$pf")")
+  fi
+  tmux select-pane -t "$pane" -T "$role"
+  # @role = human-facing border label (the domain only, no fixed slot).
+  # @cockpit_role = machine id that wake_pane targets.
+  tmux set-option -pt "$pane" @role "$role"
+  tmux set-option -pt "$pane" @cockpit_role "$role"
+  LEFT_PANES+=("$pane")
+  PREV="$pane"
+done
+
+# Orchestrator labels (the one role tied to a position: it owns the right column).
+tmux select-pane -t "$ORCH" -T "orchestrator"
+tmux set-option -pt "$ORCH" @role "🧭 orchestrator · owns this column"
 tmux set-option -pt "$ORCH" @cockpit_role "orchestrator"
-tmux set-option -pt "$FRONT" @cockpit_role "frontend-lead"
-tmux set-option -pt "$BACK" @cockpit_role "backend-lead"
-tmux set-option -pt "$QA" @cockpit_role "qa-lead"
+
+# Give the orchestrator ~55% width, then even out the left stack.
+WINDOW_WIDTH=$(tmux display-message -p -t "$SESSION:roles" '#{window_width}' 2>/dev/null || echo 160)
+tmux resize-pane -t "$ORCH" -x "$(( WINDOW_WIDTH * 55 / 100 ))" >/dev/null 2>&1 || true
+if (( ${#LEFT_PANES[@]} > 1 )); then
+  WIN_H=$(tmux display-message -p -t "$SESSION:roles" '#{window_height}' 2>/dev/null || echo 40)
+  per=$(( WIN_H / ${#LEFT_PANES[@]} ))
+  for p in "${LEFT_PANES[@]}"; do tmux resize-pane -t "$p" -y "$per" >/dev/null 2>&1 || true; done
+fi
+
 tmux set-option -w -t "$SESSION:roles" pane-border-status top >/dev/null
 tmux set-option -w -t "$SESSION:roles" pane-border-format ' #[bold,fg=cyan]#{@role} #[default]' >/dev/null
 
@@ -89,19 +137,20 @@ sleep "${COCKPIT_CLAUDE_START_DELAY:-6}"
 send_initial() {
   local pane_id="$1"
   local role="$2"
+  local prompt_file="$3"
   # Send the prompt text and the Enter as SEPARATE send-keys calls. A combined
   # `send-keys "...text..." Enter` is unreliable right after Claude's TUI starts — the
   # Enter can land before the input is ready and the prompt sits unsubmitted. Two calls
   # (with a beat between) is what makes wake_pane reliable; mirror it here.
-  tmux send-keys -t "$pane_id" -- "You are the webapp workspace $role. Read your charter .agent-cockpit/roles/$role.md and the shared protocol .agent-cockpit/roles/_PROTOCOL.md. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: ./.agent-cockpit/bin/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with ./.agent-cockpit/bin/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY."
+  tmux send-keys -t "$pane_id" -- "You are the $WORKSPACE workspace $role. Read your charter $prompt_file and the shared protocol .agent-cockpit/roles/_PROTOCOL.md. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: ./.agent-cockpit/bin/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with ./.agent-cockpit/bin/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY."
   sleep 0.4
   tmux send-keys -t "$pane_id" Enter
 }
 
-send_initial "$ORCH" orchestrator
-send_initial "$FRONT" frontend-lead
-send_initial "$BACK" backend-lead
-send_initial "$QA" qa-lead
+send_initial "$ORCH" orchestrator "$ORCH_PROMPT"
+for i in "${!LEAD_ROLES[@]}"; do
+  send_initial "${LEFT_PANES[$i]}" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}"
+done
 
 # Open visible iTerm window if available. If Automation permissions block this, tmux still runs.
 if [[ "${COCKPIT_OPEN_ITERM:-1}" == "1" ]]; then
