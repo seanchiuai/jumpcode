@@ -25,6 +25,26 @@ class ResolvePaneTests(unittest.TestCase):
         self.assertIsNone(cockpit.resolve_pane("%30\t\n", "orchestrator"))
 
 
+class InjectedTextPresentTests(unittest.TestCase):
+    TEXT = "[dispatch dsp-20260606-022 from orchestrator] author testing SKILL.md"
+
+    def test_present_plainly(self):
+        cap = "❯ " + self.TEXT + "\n"
+        self.assertTrue(cockpit._injected_text_present(cap, self.TEXT))
+
+    def test_present_even_when_wrapped_across_rows(self):
+        # tmux wraps a long line in a narrow pane; whitespace/newlines are inserted.
+        cap = "❯ [dispatch dsp-2026\n0606-022 from orch\nestrator] author te\nsting SKILL.md\n"
+        self.assertTrue(cockpit._injected_text_present(cap, self.TEXT))
+
+    def test_absent_returns_false(self):
+        cap = "❯ \n⏵⏵ auto mode on (shift+tab to cycle)   40262 tokens\n"
+        self.assertFalse(cockpit._injected_text_present(cap, self.TEXT))
+
+    def test_empty_text_is_false(self):
+        self.assertFalse(cockpit._injected_text_present("anything", ""))
+
+
 class ResolveSessionTests(unittest.TestCase):
     def test_prefers_explicit_env(self):
         with mock.patch.dict(cockpit.os.environ, {"COCKPIT_TMUX_SESSION": "macbook-webapp"}):

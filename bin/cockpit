@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,11 +44,25 @@ def resolve_pane(panes_text: str, role: str) -> Optional[str]:
     return None
 
 
+def _injected_text_present(capture_text: str, text: str) -> bool:
+    """True if `text` appears in a pane capture, tolerant of tmux line-wrapping.
+
+    A narrow pane wraps the injected line across rows, so compare with whitespace
+    stripped and match a distinctive leading slice rather than the whole string.
+    """
+    needle = re.sub(r"\s+", "", text)[:24]
+    return bool(needle) and needle in re.sub(r"\s+", "", capture_text)
+
+
 def wake_pane(session: str, role: str, text: str) -> bool:
-    """Inject a one-line nudge into the role's pane. Returns True if a pane was found+sent.
+    """Inject a nudge into the role's pane and submit it. Returns True only if VERIFIED.
 
     The live half of a dispatch: a Claude pane cannot poll its own inbox, so it sits idle
-    until keystrokes are fed in. We send the text, then a separate Enter so it submits.
+    until keystrokes are fed in. A naive send is unreliable — if the pane is mid-render
+    (Claude's "recap"/spinner state) the keystrokes can be dropped silently. So we clear
+    the input line, type the text, then CONFIRM it actually landed (capture-pane) before
+    pressing Enter; if it didn't land we clear and retry once. Returning False here makes
+    the dispatch's `woke` flag mean "verified delivered", not just "send-keys ran".
     """
     if not session:
         return False
@@ -61,9 +76,16 @@ def wake_pane(session: str, role: str, text: str) -> bool:
     pane = resolve_pane(out, role)
     if not pane:
         return False
-    subprocess.run(["tmux", "send-keys", "-t", pane, "--", text], check=False)
-    subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"], check=False)
-    return True
+    for _ in range(2):
+        subprocess.run(["tmux", "send-keys", "-t", pane, "C-u"], check=False)  # clear stale input
+        subprocess.run(["tmux", "send-keys", "-t", pane, "--", text], check=False)
+        time.sleep(0.4)
+        if _injected_text_present(_tmux_capture(pane), text):
+            subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"], check=False)
+            return True
+        subprocess.run(["tmux", "send-keys", "-t", pane, "C-u"], check=False)  # drop failed attempt
+        time.sleep(0.3)
+    return False
 
 
 def resolve_session() -> str:
