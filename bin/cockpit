@@ -24,6 +24,21 @@ EVENT_FILES = {
 }
 
 
+def resolve_pane(panes_text: str, role: str) -> Optional[str]:
+    """Map a canonical role to a tmux pane id.
+
+    `panes_text` is the output of `tmux list-panes -F '#{pane_id}\t#{@cockpit_role}'`.
+    Targets the machine-readable @cockpit_role option, not the Claude-overwritten title.
+    """
+    for line in panes_text.splitlines():
+        if "\t" not in line:
+            continue
+        pane_id, pane_role = line.split("\t", 1)
+        if pane_role.strip() == role:
+            return pane_id.strip()
+    return None
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
