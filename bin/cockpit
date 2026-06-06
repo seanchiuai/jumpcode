@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -37,6 +38,29 @@ def resolve_pane(panes_text: str, role: str) -> Optional[str]:
         if pane_role.strip() == role:
             return pane_id.strip()
     return None
+
+
+def wake_pane(session: str, role: str, text: str) -> bool:
+    """Inject a one-line nudge into the role's pane. Returns True if a pane was found+sent.
+
+    The live half of a dispatch: a Claude pane cannot poll its own inbox, so it sits idle
+    until keystrokes are fed in. We send the text, then a separate Enter so it submits.
+    """
+    if not session:
+        return False
+    try:
+        out = subprocess.run(
+            ["tmux", "list-panes", "-t", session, "-F", "#{pane_id}\t#{@cockpit_role}"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+    pane = resolve_pane(out, role)
+    if not pane:
+        return False
+    subprocess.run(["tmux", "send-keys", "-t", pane, "--", text], check=False)
+    subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"], check=False)
+    return True
 
 
 def now_iso() -> str:
