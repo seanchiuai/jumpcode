@@ -65,6 +65,27 @@ def wake_pane(session: str, role: str, text: str) -> bool:
     return True
 
 
+def resolve_session() -> str:
+    """The tmux session whose panes we wake.
+
+    Prefer an explicit COCKPIT_TMUX_SESSION (set by external senders like Hermes). When
+    unset but we are running INSIDE tmux (an agent in a pane dispatching a sibling),
+    fall back to the current session so agent-to-agent wake works with no env wiring.
+    """
+    explicit = os.environ.get("COCKPIT_TMUX_SESSION", "")
+    if explicit:
+        return explicit
+    if os.environ.get("TMUX"):
+        try:
+            return subprocess.run(
+                ["tmux", "display-message", "-p", "#{session_name}"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return ""
+    return ""
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -194,7 +215,7 @@ def cmd_dispatch(args: argparse.Namespace, home: Path) -> int:
             f"task={event.get('task') or '-'}: {event['subject'] or event['body'][:80]}",
         )
         if not args.no_wake:
-            session = os.environ.get("COCKPIT_TMUX_SESSION", "")
+            session = resolve_session()
             headline = event["subject"] or body[:80]
             woke = wake_pane(
                 session,

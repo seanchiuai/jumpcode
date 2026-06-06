@@ -32,6 +32,7 @@ agent_cmd() {
   local prompt_file="$2"
   cat <<EOF
 cd "$ROOT"
+export COCKPIT_TMUX_SESSION="$SESSION"
 printf '\\033]2;%s\\033\\\\' "$role"
 clear
 printf 'MacBook webapp cockpit role: %s\\n' "$role"
