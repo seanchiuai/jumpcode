@@ -292,7 +292,7 @@ _RUNTIME_MARKERS = {
         "waiting": ("Do you want", "❯ 1.", "1. Yes", "Allow this"),
     },
     "codex": {
-        # busy ("Working … esc to interrupt") is TO-VERIFY on 0.137.0-alpha.4 (see design doc).
+        # busy line confirmed live on 0.137.0-alpha.4 (2026-06-07): "• Working (Ns • esc to interrupt)".
         "busy": ("esc to interrupt",),
         "waiting": ("Do you trust", "1. Yes", "› 1.", "Allow command"),
     },

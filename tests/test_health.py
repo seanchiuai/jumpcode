@@ -42,9 +42,8 @@ class PaneStateTests(unittest.TestCase):
         self.assertEqual(cockpit.pane_state(screen, "codex"), "idle")
 
     def test_codex_busy_marker(self):
-        # TO-VERIFY live (design doc): web sources show "Working (… esc to interrupt)".
-        # If the live launch shows a different string, update _RUNTIME_MARKERS["codex"]["busy"].
-        screen = "Working (1m 4s • esc to interrupt)\n› \n"
+        # confirmed live on codex 0.137.0-alpha.4 (2026-06-07): "• Working (Ns • esc to interrupt)"
+        screen = "• Working (1m 4s • esc to interrupt)\n› \n"
         self.assertEqual(cockpit.pane_state(screen, "codex"), "working")
 
     def test_unknown_runtime_falls_back_to_claude(self):

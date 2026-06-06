@@ -51,10 +51,10 @@ A throwaway tmux session running the app-bundled Codex (`codex-cli 0.137.0-alpha
   continue`, which the existing `_WAITING_MARKERS` already matches.
 - **Codex config has no Linear MCP** (only `pencil`, `node_repl`) — see Prerequisites.
 
-**Not yet settled (verify in the live mixed launch, do not assume):** Codex
-`0.137.0-alpha.4`'s **busy** status line. Web sources say `Working (… esc to interrupt)`
-— which *would* match the existing `_BUSY_MARKER` for free — but the spike never
-submitted a turn, so this is **to-verify**, not confirmed. Alpha status strings drift.
+**Busy marker — now confirmed live (2026-06-07).** A controlled throwaway turn on
+`0.137.0-alpha.4` showed the busy status line as `• Working (Ns • esc to interrupt)`,
+which contains `esc to interrupt` and so matches `_RUNTIME_MARKERS["codex"]["busy"]`. No
+code change was needed; the earlier "to-verify" caveat is closed.
 
 ## What gets built
 
