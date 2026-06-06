@@ -90,6 +90,31 @@ sources: **Linear** (what the work is) and the **dispatch log** (what was said):
 ./.agent-cockpit/bin/dispatch log 40
 ```
 
+## Health checks & subagent visibility
+
+Hermes or the orchestrator can snapshot the whole team at any time:
+
+```bash
+./.agent-cockpit/bin/health          # per-role: alive/stopped · working/waiting/idle · last-seen · subagents
+./.agent-cockpit/bin/health --json   # same, machine-readable
+```
+
+`health` reads liveness and busy/idle state from your tmux pane directly. But your
+**subagents run in-process** and are invisible from outside — so leads must self-report
+them. When you spawn or finish a subagent, send a `notice` whose subject follows this
+exact convention:
+
+```bash
+./.agent-cockpit/bin/dispatch send --from <your-role> --to orchestrator --kind notice \
+  --subject "subagent:start <name>" "why you're spawning it"
+# ...and when it's done:
+./.agent-cockpit/bin/dispatch send --from <your-role> --to orchestrator --kind notice \
+  --subject "subagent:end <name>" "result summary"
+```
+
+`health` counts `start` minus `end` per role, so an unmatched `start` shows as an active
+subagent. Keep names stable between the start and end so they pair up.
+
 ## Guardrails are soft (v1)
 
 Your charter names the territory you own and what to leave alone. These are

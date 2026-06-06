@@ -12,6 +12,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -256,6 +257,143 @@ def cmd_dispatch(args: argparse.Namespace, home: Path) -> int:
     return 2
 
 
+# --- health check -----------------------------------------------------------
+
+# A Claude TUI shows "esc to interrupt" in its status line only while working;
+# a numbered/confirm prompt means it is waiting on the human; otherwise it is idle.
+_BUSY_MARKER = "esc to interrupt"
+_WAITING_MARKERS = ("Do you want", "❯ 1.", "1. Yes", "Allow this")
+
+
+def pane_state(capture_text: str) -> str:
+    """Classify a captured Claude pane screen as 'working' | 'waiting' | 'idle'."""
+    if _BUSY_MARKER in capture_text:
+        return "working"
+    for marker in _WAITING_MARKERS:
+        if marker in capture_text:
+            return "waiting"
+    return "idle"
+
+
+_SUBAGENT_RE = re.compile(r"^subagent:(start|end)\b[:\s]*(.*)$", re.IGNORECASE)
+
+
+def active_subagents(dispatches: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    """Per-role active subagents, from the leads-self-report convention.
+
+    A lead announces subagent lifecycle with a notice dispatch whose subject is
+    'subagent:start <name>' / 'subagent:end <name>'. Active = started minus ended,
+    grouped by the announcing role. Returns only roles with >=1 active subagent.
+    """
+    active: Dict[str, List[str]] = {}
+    for d in dispatches:
+        if d.get("type") != "dispatch.sent" or d.get("kind") != "notice":
+            continue
+        m = _SUBAGENT_RE.match((d.get("subject") or "").strip())
+        if not m:
+            continue
+        event = m.group(1).lower()
+        name = m.group(2).strip() or "(unnamed)"
+        role = d.get("from") or "(unknown)"
+        names = active.setdefault(role, [])
+        if event == "start":
+            names.append(name)
+        elif name in names:
+            names.remove(name)
+        elif names:
+            names.pop()
+    return {role: names for role, names in active.items() if names}
+
+
+def _tmux_capture(pane_id: str) -> str:
+    try:
+        return subprocess.run(
+            ["tmux", "capture-pane", "-p", "-t", pane_id],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return ""
+
+
+def cmd_health(args: argparse.Namespace, home: Path) -> int:
+    session = resolve_session()
+    dispatches = events(home, "dispatch")
+    subs = active_subagents(dispatches)
+
+    last_seen: Dict[str, str] = {}
+    for d in dispatches:
+        if d.get("type") != "dispatch.sent":
+            continue
+        ts = d.get("created_at")
+        for role in (d.get("from"), d.get("to")):
+            if role:
+                last_seen[role] = ts
+
+    panes_text = ""
+    if session:
+        try:
+            panes_text = subprocess.run(
+                ["tmux", "list-panes", "-t", session, "-F",
+                 "#{pane_id}\t#{@cockpit_role}\t#{pane_current_command}\t#{pane_dead}"],
+                capture_output=True, text=True, check=True,
+            ).stdout
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            panes_text = ""
+
+    agents: List[Dict[str, Any]] = []
+    seen_roles = set()
+    for line in panes_text.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 4:
+            continue
+        pane_id, role, cmd, dead = parts[0], parts[1].strip(), parts[2], parts[3]
+        if not role:
+            continue
+        seen_roles.add(role)
+        alive = dead != "1"
+        state = "stopped" if not alive else pane_state(_tmux_capture(pane_id))
+        agents.append({
+            "role": role, "pane": pane_id, "alive": alive, "command": cmd,
+            "state": state, "subagents": subs.get(role, []),
+            "last_seen": last_seen.get(role),
+        })
+
+    # Roles that have appeared in the dispatch log but have no live pane right now.
+    for role in sorted(r for r in last_seen if r not in seen_roles
+                       and r not in ("hermes", "human")):
+        agents.append({
+            "role": role, "pane": None, "alive": False, "command": None,
+            "state": "absent", "subagents": subs.get(role, []),
+            "last_seen": last_seen.get(role),
+        })
+
+    clients = 0
+    if session:
+        try:
+            clients = len([c for c in subprocess.run(
+                ["tmux", "list-clients", "-t", session, "-F", "#{client_name}"],
+                capture_output=True, text=True, check=True,
+            ).stdout.splitlines() if c.strip()])
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            clients = 0
+
+    result = {"session": session or None, "attached_clients": clients, "agents": agents}
+    if args.json:
+        print_json(result)
+        return 0
+
+    print(f"session: {session or '(none)'}   attached clients: {clients}")
+    if not agents:
+        print("  no cockpit panes found "
+              "(set COCKPIT_TMUX_SESSION or run inside the session)")
+    for a in agents:
+        dot = "●" if a["alive"] else "○"
+        sub = ("  subagents=" + ", ".join(a["subagents"])) if a["subagents"] else ""
+        print(f"  {dot} {a['role']:<16} {a['state']:<8} "
+              f"last_seen={a['last_seen'] or '-'}{sub}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cockpit", description="Local dispatch CLI (Linear owns projects/tasks)"
@@ -287,6 +425,9 @@ def build_parser() -> argparse.ArgumentParser:
     dl = dsub.add_parser("log", help="human-readable dispatch feed")
     dl.add_argument("n", nargs="?", type=int, default=40)
 
+    health = sub.add_parser("health", help="per-role liveness / busy / subagent snapshot")
+    health.add_argument("--json", action="store_true")
+
     return parser
 
 
@@ -297,6 +438,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     if args.cmd == "dispatch":
         return cmd_dispatch(args, home)
+    if args.cmd == "health":
+        return cmd_health(args, home)
     parser.error("unknown command")
     return 2
 
