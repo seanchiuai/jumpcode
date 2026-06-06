@@ -88,15 +88,13 @@ sleep "${COCKPIT_CLAUDE_START_DELAY:-6}"
 send_initial() {
   local pane_id="$1"
   local role="$2"
-  local role_file="$3"
-  local inbox="$4"
-  tmux send-keys -t "$pane_id" "You are the webapp workspace $role. Read $role_file, ORCHESTRATION.md, .agent-cockpit/INSTRUCTIONS.md, and .agent-cockpit/workspaces/webapp/WORKSPACE.md. Then run ./.agent-cockpit/bin/status and ./.agent-cockpit/bin/mail inbox $inbox. Wait for orchestrator/Hermes instructions. Use .agent-cockpit/bin/task, mail, and report as canonical state." Enter
+  tmux send-keys -t "$pane_id" "You are the webapp workspace $role. Read your charter .agent-cockpit/roles/$role.md and the shared protocol .agent-cockpit/roles/_PROTOCOL.md. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: ./.agent-cockpit/bin/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with ./.agent-cockpit/bin/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY." Enter
 }
 
-send_initial "$ORCH" orchestrator .agent-cockpit/roles/orchestrator.md orchestrator
-send_initial "$FRONT" frontend-lead .agent-cockpit/roles/frontend-lead.md frontend-lead
-send_initial "$BACK" backend-lead .agent-cockpit/roles/backend-lead.md backend-lead
-send_initial "$QA" qa-lead .agent-cockpit/roles/qa-lead.md qa-lead
+send_initial "$ORCH" orchestrator
+send_initial "$FRONT" frontend-lead
+send_initial "$BACK" backend-lead
+send_initial "$QA" qa-lead
 
 # Open visible iTerm window if available. If Automation permissions block this, tmux still runs.
 if [[ "${COCKPIT_OPEN_ITERM:-1}" == "1" ]]; then
