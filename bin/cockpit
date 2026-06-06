@@ -222,7 +222,8 @@ def cmd_dispatch(args: argparse.Namespace, home: Path) -> int:
                 session,
                 args.to,
                 f"[dispatch {event['dispatch_id']} from {event['from']}] {headline} "
-                f"— read it: ./.agent-cockpit/bin/dispatch inbox {args.to}",
+                f"— full text: ./.agent-cockpit/bin/dispatch show {event['dispatch_id']} "
+                f"(inbox: ./.agent-cockpit/bin/dispatch inbox {args.to})",
             )
             event["woke"] = woke
         print_json(event)
