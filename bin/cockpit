@@ -294,6 +294,8 @@ _RUNTIME_MARKERS = {
     "codex": {
         # busy line confirmed live on 0.137.0-alpha.4 (2026-06-07): "• Working (Ns • esc to interrupt)".
         "busy": ("esc to interrupt",),
+        # "Do you trust"/"1. Yes" confirmed live; "Allow command" is an unverified guess
+        # at Codex's exec-approval prompt (health is best-effort, so a miss only mislabels idle/waiting).
         "waiting": ("Do you trust", "1. Yes", "› 1.", "Allow command"),
     },
 }
