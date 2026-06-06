@@ -7,11 +7,13 @@ Commands intentionally stay small: run, task, mail, report.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import subprocess
 import sys
 from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -22,6 +24,7 @@ EVENT_FILES = {
     "task": "tasks.jsonl",
     "message": "messages.jsonl",
     "report": "reports.jsonl",
+    "dispatch": "dispatches.jsonl",
 }
 
 
@@ -83,6 +86,24 @@ def ensure_dirs(home: Path) -> None:
         (home / rel).mkdir(parents=True, exist_ok=True)
 
 
+@contextmanager
+def _lock(home: Path):
+    """Exclusive cross-process/thread lock.
+
+    flock is per open file description, so a FRESH FD per acquisition is what makes this
+    serialize threads in-process — do not hoist the open() to module scope, and never
+    acquire this lock while already holding it (nesting deadlocks).
+    """
+    ensure_dirs(home)
+    lock_path = home / "state" / ".lock"
+    with lock_path.open("w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+
+
 def state_path(home: Path, kind: str) -> Path:
     return home / "state" / EVENT_FILES[kind]
 
@@ -121,21 +142,28 @@ def set_current_run(home: Path, event: Dict[str, Any]) -> None:
     (home / "state" / "current_run.json").write_text(json.dumps(event, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def make_id(home: Path, prefix: str, kind: str) -> str:
+def make_id(home: Path, prefix: str, kind: str = "") -> str:
+    """Reserve a unique id of the form `prefix-YYYYMMDD-NNN`.
+
+    Reservation is atomic: the per-(prefix,date) counter is read-incremented-persisted
+    under `_lock`, so the id is claimed at mint time. This holds even when the caller's
+    append happens in a separate, later call (no TOCTOU between mint and append).
+    `kind` is accepted for backwards-compat but no longer used for numbering.
+    """
     date = datetime.now(timezone.utc).strftime("%Y%m%d")
-    existing: List[Dict[str, Any]] = []
-    if kind in EVENT_FILES:
-        existing = events(home, kind)
-    count = 1
-    for event in existing:
-        for key in ("run_id", "task_id", "message_id", "report_id"):
-            val = str(event.get(key, ""))
-            if val.startswith(f"{prefix}-{date}-"):
-                try:
-                    count = max(count, int(val.rsplit("-", 1)[1]) + 1)
-                except ValueError:
-                    pass
-    return f"{prefix}-{date}-{count:03d}"
+    key = f"{prefix}-{date}"
+    with _lock(home):
+        path = home / "state" / "counters.json"
+        counters: Dict[str, int] = {}
+        if path.exists():
+            try:
+                counters = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, ValueError):
+                counters = {}
+        count = int(counters.get(key, 0)) + 1
+        counters[key] = count
+        path.write_text(json.dumps(counters, sort_keys=True) + "\n", encoding="utf-8")
+    return f"{key}-{count:03d}"
 
 
 def print_json(payload: Any) -> None:
