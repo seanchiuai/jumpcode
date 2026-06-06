@@ -1,0 +1,446 @@
+#!/usr/bin/env python3
+"""Minimal local orchestration CLI for the MacBook agent cockpit.
+
+Source of truth is append-only JSONL under .agent-cockpit/state/.
+Commands intentionally stay small: run, task, mail, report.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
+
+
+EVENT_FILES = {
+    "run": "runs.jsonl",
+    "task": "tasks.jsonl",
+    "message": "messages.jsonl",
+    "report": "reports.jsonl",
+}
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def cockpit_home() -> Path:
+    override = os.environ.get("COCKPIT_HOME")
+    if override:
+        return Path(override).expanduser().resolve()
+    cwd = Path.cwd().resolve()
+    existing = cwd / ".agent-cockpit"
+    if existing.exists() or cwd.name != ".agent-cockpit":
+        return existing
+    return cwd
+
+
+def ensure_dirs(home: Path) -> None:
+    for rel in ["state", "shared", "bin", "roles"]:
+        (home / rel).mkdir(parents=True, exist_ok=True)
+
+
+def state_path(home: Path, kind: str) -> Path:
+    return home / "state" / EVENT_FILES[kind]
+
+
+def append_event(home: Path, kind: str, event: Dict[str, Any]) -> None:
+    ensure_dirs(home)
+    path = state_path(home, kind)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
+
+
+def read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    events: List[Dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            events.append(json.loads(line))
+    return events
+
+
+def events(home: Path, kind: str) -> List[Dict[str, Any]]:
+    return read_jsonl(state_path(home, kind))
+
+
+def current_run(home: Path) -> Optional[Dict[str, Any]]:
+    path = home / "state" / "current_run.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    starts = [e for e in events(home, "run") if e.get("type") == "run.started"]
+    return starts[-1] if starts else None
+
+
+def set_current_run(home: Path, event: Dict[str, Any]) -> None:
+    ensure_dirs(home)
+    (home / "state" / "current_run.json").write_text(json.dumps(event, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def make_id(home: Path, prefix: str, kind: str) -> str:
+    date = datetime.now(timezone.utc).strftime("%Y%m%d")
+    existing: List[Dict[str, Any]] = []
+    if kind in EVENT_FILES:
+        existing = events(home, kind)
+    count = 1
+    for event in existing:
+        for key in ("run_id", "task_id", "message_id", "report_id"):
+            val = str(event.get(key, ""))
+            if val.startswith(f"{prefix}-{date}-"):
+                try:
+                    count = max(count, int(val.rsplit("-", 1)[1]) + 1)
+                except ValueError:
+                    pass
+    return f"{prefix}-{date}-{count:03d}"
+
+
+def print_json(payload: Any) -> None:
+    print(json.dumps(payload, indent=None, sort_keys=True, ensure_ascii=False))
+
+
+def append_conversation(home: Path, line: str) -> None:
+    ensure_dirs(home)
+    with (home / "shared" / "conversation.log").open("a", encoding="utf-8") as f:
+        f.write(f"[{now_iso()}] {line}\n")
+
+
+def reconstruct_tasks(home: Path) -> Dict[str, Dict[str, Any]]:
+    tasks: Dict[str, Dict[str, Any]] = {}
+    for event in events(home, "task"):
+        typ = event.get("type")
+        tid = event.get("task_id")
+        if not tid:
+            continue
+        if typ == "task.created":
+            tasks[tid] = dict(event)
+        else:
+            task = tasks.setdefault(tid, {"task_id": tid})
+            if typ == "task.assigned":
+                task["owner"] = event.get("owner")
+                task["status"] = "assigned"
+            elif typ == "task.started":
+                task["status"] = "in_progress"
+                task["started_by"] = event.get("by")
+                task["started_at"] = event.get("created_at")
+            elif typ == "task.status":
+                task["status"] = event.get("status")
+                for key in ["reason", "by"]:
+                    if key in event:
+                        task[key] = event[key]
+            elif typ == "task.completed":
+                task["status"] = "done"
+                task["completed_by"] = event.get("by")
+                task["completed_at"] = event.get("created_at")
+            elif typ == "task.cancelled":
+                task["status"] = "cancelled"
+                task["cancelled_by"] = event.get("by")
+                task["reason"] = event.get("reason")
+    return tasks
+
+
+def current_run_id(home: Path) -> Optional[str]:
+    run = current_run(home)
+    return run.get("run_id") if run else None
+
+
+def cmd_run(args: argparse.Namespace, home: Path) -> int:
+    if args.run_cmd == "start":
+        event = {
+            "type": "run.started",
+            "run_id": make_id(home, "run", "run"),
+            "goal": args.goal,
+            "created_by": args.created_by,
+            "participants": args.participant or [],
+            "workspace": str(Path.cwd().resolve()),
+            "created_at": now_iso(),
+        }
+        append_event(home, "run", event)
+        set_current_run(home, event)
+        append_conversation(home, f"RUN started {event['run_id']}: {args.goal}")
+        print_json(event)
+        return 0
+    if args.run_cmd == "current":
+        run = current_run(home)
+        if not run:
+            print("No current run", file=sys.stderr)
+            return 1
+        print_json(run)
+        return 0
+    if args.run_cmd == "note":
+        run = current_run(home)
+        if not run:
+            print("No current run", file=sys.stderr)
+            return 1
+        event = {"type": "run.note", "run_id": run["run_id"], "note": args.note, "created_by": args.created_by, "created_at": now_iso()}
+        append_event(home, "run", event)
+        append_conversation(home, f"RUN note {run['run_id']}: {args.note}")
+        print_json(event)
+        return 0
+    if args.run_cmd == "checkpoint":
+        run = current_run(home)
+        if not run:
+            print("No current run", file=sys.stderr)
+            return 1
+        event = {"type": "run.checkpoint", "run_id": run["run_id"], "summary": args.summary, "created_by": args.created_by, "created_at": now_iso()}
+        append_event(home, "run", event)
+        append_conversation(home, f"RUN checkpoint {run['run_id']}: {args.summary}")
+        print_json(event)
+        return 0
+    if args.run_cmd == "summary":
+        run = current_run(home)
+        if not run:
+            print("No current run", file=sys.stderr)
+            return 1
+        rid = run["run_id"]
+        task_list = [t for t in reconstruct_tasks(home).values() if t.get("run_id") == rid]
+        message_list = [m for m in events(home, "message") if m.get("run_id") == rid and m.get("type") == "message.sent"]
+        report_list = [r for r in events(home, "report") if r.get("run_id") == rid]
+        summary = {
+            "run_id": rid,
+            "goal": run.get("goal"),
+            "participants": run.get("participants", []),
+            "task_counts": dict(Counter(t.get("status", "unknown") for t in task_list)),
+            "tasks": sorted(task_list, key=lambda t: t.get("created_at", "")),
+            "message_count": len(message_list),
+            "report_count": len(report_list),
+        }
+        if args.json:
+            print_json(summary)
+        else:
+            print(f"Run {rid}: {summary['goal']}")
+            print(f"Tasks: {summary['task_counts']}")
+            print(f"Messages: {summary['message_count']} Reports: {summary['report_count']}")
+        return 0
+    return 2
+
+
+def cmd_task(args: argparse.Namespace, home: Path) -> int:
+    if args.task_cmd == "create":
+        rid = current_run_id(home)
+        event = {
+            "type": "task.created",
+            "task_id": make_id(home, "task", "task"),
+            "run_id": rid,
+            "title": args.title,
+            "description": args.description or "",
+            "owner": args.owner,
+            "created_by": args.created_by,
+            "status": "assigned" if args.owner else "new",
+            "priority": args.priority,
+            "acceptance_criteria": args.criteria or [],
+            "parent_task_id": args.parent,
+            "created_at": now_iso(),
+        }
+        append_event(home, "task", event)
+        append_conversation(home, f"TASK created {event['task_id']} owner={args.owner or '-'}: {args.title}")
+        print_json(event)
+        return 0
+    if args.task_cmd == "list":
+        tasks = sorted(reconstruct_tasks(home).values(), key=lambda t: t.get("created_at", ""))
+        if args.json:
+            print_json(tasks)
+        else:
+            for t in tasks:
+                print(f"{t.get('task_id')} [{t.get('status')}] owner={t.get('owner') or '-'} {t.get('title','')}")
+        return 0
+    if args.task_cmd == "show":
+        task = reconstruct_tasks(home).get(args.task_id)
+        if not task:
+            print(f"Unknown task: {args.task_id}", file=sys.stderr)
+            return 1
+        print_json(task) if args.json else print(json.dumps(task, indent=2, sort_keys=True, ensure_ascii=False))
+        return 0
+    if args.task_cmd == "start":
+        event = {"type": "task.started", "task_id": args.task_id, "by": args.by, "created_at": now_iso()}
+        append_event(home, "task", event)
+        append_conversation(home, f"TASK started {args.task_id} by {args.by}")
+        print_json(event)
+        return 0
+    if args.task_cmd == "done":
+        event = {"type": "task.completed", "task_id": args.task_id, "by": args.by, "created_at": now_iso()}
+        append_event(home, "task", event)
+        append_conversation(home, f"TASK done {args.task_id} by {args.by}")
+        print_json(event)
+        return 0
+    if args.task_cmd == "block":
+        event = {"type": "task.status", "task_id": args.task_id, "status": "blocked", "reason": args.reason, "by": args.by, "created_at": now_iso()}
+        append_event(home, "task", event)
+        append_conversation(home, f"TASK blocked {args.task_id} by {args.by}: {args.reason}")
+        print_json(event)
+        return 0
+    return 2
+
+
+def message_event(args: argparse.Namespace, home: Path, kind: str) -> Dict[str, Any]:
+    task_id = getattr(args, "task", None)
+    body = " ".join(getattr(args, "body", []) or []).strip()
+    msg_id = make_id(home, "msg", "message")
+    return {
+        "type": "message.sent",
+        "message_id": msg_id,
+        "run_id": current_run_id(home),
+        "task_id": task_id,
+        "thread_id": task_id or getattr(args, "reply_to", None) or msg_id,
+        "from": getattr(args, "from_"),
+        "to": args.to,
+        "kind": kind,
+        "subject": getattr(args, "subject", "") or "",
+        "body": body,
+        "requires_reply": getattr(args, "requires_reply", False),
+        "reply_to": getattr(args, "reply_to", None),
+        "created_at": now_iso(),
+    }
+
+
+def cmd_mail(args: argparse.Namespace, home: Path) -> int:
+    if args.mail_cmd in {"send", "reply"}:
+        event = message_event(args, home, "reply" if args.mail_cmd == "reply" else args.kind)
+        append_event(home, "message", event)
+        append_conversation(home, f"MAIL {event['kind']} {event['message_id']} {event['from']} -> {event['to']} task={event.get('task_id') or '-'}: {event['subject'] or event['body'][:80]}")
+        print_json(event)
+        return 0
+    if args.mail_cmd == "inbox":
+        msgs = [m for m in events(home, "message") if m.get("type") == "message.sent" and m.get("to") == args.agent]
+        if args.json:
+            print_json(msgs)
+        else:
+            for m in msgs:
+                print(f"{m.get('message_id')} from={m.get('from')} kind={m.get('kind')} task={m.get('task_id') or '-'} {m.get('subject') or m.get('body','')[:80]}")
+        return 0
+    if args.mail_cmd == "show":
+        for m in events(home, "message"):
+            if m.get("message_id") == args.message_id:
+                print_json(m) if args.json else print(json.dumps(m, indent=2, sort_keys=True, ensure_ascii=False))
+                return 0
+        print(f"Unknown message: {args.message_id}", file=sys.stderr)
+        return 1
+    return 2
+
+
+def parse_check(value: str) -> Dict[str, str]:
+    parts = value.split(":", 2)
+    if len(parts) == 1:
+        return {"command": parts[0], "result": "unknown", "summary": ""}
+    if len(parts) == 2:
+        return {"command": parts[0], "result": parts[1], "summary": ""}
+    return {"command": parts[0], "result": parts[1], "summary": parts[2]}
+
+
+def cmd_report(args: argparse.Namespace, home: Path) -> int:
+    rid = current_run_id(home)
+    if args.report_cmd == "done":
+        report = {
+            "type": "report.done",
+            "report_id": make_id(home, "rep", "report"),
+            "run_id": rid,
+            "task_id": args.task_id,
+            "from": args.from_,
+            "summary": args.summary,
+            "work_performed": args.work or [],
+            "files_changed": args.file or [],
+            "checks_run": [parse_check(c) for c in (args.check or [])],
+            "open_concerns": args.concern or [],
+            "next": args.next or "",
+            "created_at": now_iso(),
+        }
+        append_event(home, "report", report)
+        append_event(home, "task", {"type": "task.completed", "task_id": args.task_id, "by": args.from_, "created_at": report["created_at"]})
+        append_conversation(home, f"REPORT DONE {report['report_id']} from={args.from_} task={args.task_id}: {args.summary}")
+        print_json(report)
+        return 0
+    if args.report_cmd == "blocked":
+        report = {
+            "type": "report.blocked",
+            "report_id": make_id(home, "rep", "report"),
+            "run_id": rid,
+            "task_id": args.task_id,
+            "from": args.from_,
+            "blocker": args.blocker,
+            "why_blocked": args.why or "",
+            "what_i_tried": args.tried or [],
+            "need_from": args.need_from,
+            "created_at": now_iso(),
+        }
+        append_event(home, "report", report)
+        append_event(home, "task", {"type": "task.status", "task_id": args.task_id, "status": "blocked", "reason": args.blocker, "by": args.from_, "created_at": report["created_at"]})
+        append_conversation(home, f"REPORT BLOCKED {report['report_id']} from={args.from_} task={args.task_id}: {args.blocker}")
+        print_json(report)
+        return 0
+    return 2
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="cockpit", description="Local JSONL-backed agent orchestration CLI")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    run = sub.add_parser("run")
+    run_sub = run.add_subparsers(dest="run_cmd", required=True)
+    rs = run_sub.add_parser("start")
+    rs.add_argument("--goal", required=True)
+    rs.add_argument("--participant", action="append", default=[])
+    rs.add_argument("--created-by", default="hermes")
+    run_sub.add_parser("current")
+    rn = run_sub.add_parser("note"); rn.add_argument("note"); rn.add_argument("--created-by", default="hermes")
+    rc = run_sub.add_parser("checkpoint"); rc.add_argument("summary"); rc.add_argument("--created-by", default="hermes")
+    rsum = run_sub.add_parser("summary"); rsum.add_argument("--json", action="store_true")
+
+    task = sub.add_parser("task")
+    task_sub = task.add_subparsers(dest="task_cmd", required=True)
+    tc = task_sub.add_parser("create")
+    tc.add_argument("--title", required=True); tc.add_argument("--owner"); tc.add_argument("--description")
+    tc.add_argument("--criteria", action="append", default=[]); tc.add_argument("--priority", default="normal")
+    tc.add_argument("--parent"); tc.add_argument("--created-by", default="orchestrator")
+    tl = task_sub.add_parser("list"); tl.add_argument("--json", action="store_true")
+    tsh = task_sub.add_parser("show"); tsh.add_argument("task_id"); tsh.add_argument("--json", action="store_true")
+    ts = task_sub.add_parser("start"); ts.add_argument("task_id"); ts.add_argument("--by", required=True)
+    td = task_sub.add_parser("done"); td.add_argument("task_id"); td.add_argument("--by", required=True)
+    tb = task_sub.add_parser("block"); tb.add_argument("task_id"); tb.add_argument("reason"); tb.add_argument("--by", required=True)
+
+    mail = sub.add_parser("mail")
+    mail_sub = mail.add_subparsers(dest="mail_cmd", required=True)
+    ms = mail_sub.add_parser("send")
+    ms.add_argument("--from", dest="from_", required=True); ms.add_argument("--to", required=True)
+    ms.add_argument("--task"); ms.add_argument("--subject", default=""); ms.add_argument("--kind", default="request", choices=["request", "reply", "notice", "blocker", "handoff"])
+    ms.add_argument("--requires-reply", action="store_true"); ms.add_argument("body", nargs="*")
+    mi = mail_sub.add_parser("inbox"); mi.add_argument("agent"); mi.add_argument("--json", action="store_true")
+    msh = mail_sub.add_parser("show"); msh.add_argument("message_id"); msh.add_argument("--json", action="store_true")
+    mr = mail_sub.add_parser("reply")
+    mr.add_argument("--from", dest="from_", required=True); mr.add_argument("--to", required=True); mr.add_argument("--task"); mr.add_argument("--reply-to", required=True); mr.add_argument("--subject", default="")
+    mr.add_argument("body", nargs="*")
+
+    report = sub.add_parser("report")
+    report_sub = report.add_subparsers(dest="report_cmd", required=True)
+    rd = report_sub.add_parser("done")
+    rd.add_argument("task_id"); rd.add_argument("--from", dest="from_", required=True); rd.add_argument("--summary", required=True)
+    rd.add_argument("--work", action="append", default=[]); rd.add_argument("--file", action="append", default=[]); rd.add_argument("--check", action="append", default=[])
+    rd.add_argument("--concern", action="append", default=[]); rd.add_argument("--next", default="")
+    rb = report_sub.add_parser("blocked")
+    rb.add_argument("task_id"); rb.add_argument("--from", dest="from_", required=True); rb.add_argument("--blocker", required=True)
+    rb.add_argument("--why", default=""); rb.add_argument("--tried", action="append", default=[]); rb.add_argument("--need-from", required=True)
+    return parser
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    home = cockpit_home()
+    ensure_dirs(home)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.cmd == "run":
+        return cmd_run(args, home)
+    if args.cmd == "task":
+        return cmd_task(args, home)
+    if args.cmd == "mail":
+        return cmd_mail(args, home)
+    if args.cmd == "report":
+        return cmd_report(args, home)
+    parser.error("unknown command")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

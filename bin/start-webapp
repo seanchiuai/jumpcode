@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="/Users/seanchiu/Desktop/workspace-macbook"
+SESSION="${COCKPIT_TMUX_SESSION:-macbook-webapp}"
+CLAUDE_BIN="${CLAUDE_BIN:-claude}"
+KILL_EXISTING="${COCKPIT_KILL_EXISTING:-1}"
+
+cd "$ROOT"
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "tmux is required" >&2
+  exit 1
+fi
+
+if ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
+  echo "Claude Code command not found: $CLAUDE_BIN" >&2
+  exit 1
+fi
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  if [[ "$KILL_EXISTING" == "1" ]]; then
+    tmux kill-session -t "$SESSION"
+  else
+    echo "session already exists: $SESSION" >&2
+    exit 2
+  fi
+fi
+
+agent_cmd() {
+  local role="$1"
+  local prompt_file="$2"
+  cat <<EOF
+cd "$ROOT"
+printf '\\033]2;%s\\033\\\\' "$role"
+clear
+printf 'MacBook webapp cockpit role: %s\\n' "$role"
+printf 'Prompt file: %s\\n\\n' "$prompt_file"
+printf 'Claude Code will start now. Initial instructions will be injected by tmux.\\n'
+exec "$CLAUDE_BIN"
+EOF
+}
+
+feed_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; printf "\\033]2;feed\\033\\\\"; touch .agent-cockpit/shared/conversation.log; clear; echo "conversation feed (press Ctrl-b n/p to switch windows)"; tail -n 120 -f .agent-cockpit/shared/conversation.log'
+status_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; printf "\\033]2;status\\033\\\\"; while true; do clear; echo "cockpit status (updates every 5s)"; date; ./.agent-cockpit/bin/status || true; sleep 5; done'
+
+# Main window: only the four accountable Claude Code roles.
+# Layout convention: orchestrator is always the full-height RIGHT pane.
+# Leads are stacked vertically on the LEFT.
+ORCH=$(tmux new-session -d -P -F '#{pane_id}' -s "$SESSION" -n roles -c "$ROOT" "$(agent_cmd orchestrator .agent-cockpit/roles/orchestrator.md)")
+FRONT=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" "$(agent_cmd frontend-lead .agent-cockpit/roles/frontend-lead.md)")
+BACK=$(tmux split-window -P -F '#{pane_id}' -t "$FRONT" -v -c "$ROOT" "$(agent_cmd backend-lead .agent-cockpit/roles/backend-lead.md)")
+QA=$(tmux split-window -P -F '#{pane_id}' -t "$BACK" -v -c "$ROOT" "$(agent_cmd qa-lead .agent-cockpit/roles/qa-lead.md)")
+
+WINDOW_WIDTH=$(tmux display-message -p -t "$SESSION:roles" '#{window_width}' 2>/dev/null || echo 160)
+ORCH_WIDTH=$(( WINDOW_WIDTH * 55 / 100 ))
+tmux resize-pane -t "$ORCH" -x "$ORCH_WIDTH" >/dev/null 2>&1 || true
+
+tmux select-pane -t "$ORCH" -T "ORCHESTRATOR — RIGHT"
+tmux select-pane -t "$FRONT" -T "FRONTEND LEAD — left top"
+tmux select-pane -t "$BACK" -T "BACKEND LEAD — left middle"
+tmux select-pane -t "$QA" -T "QA LEAD — left bottom"
+tmux set-option -pt "$ORCH" @role "🧭 ORCHESTRATOR — RIGHT SIDE"
+tmux set-option -pt "$FRONT" @role "🎨 FRONTEND LEAD — LEFT TOP"
+tmux set-option -pt "$BACK" @role "🛠 BACKEND LEAD — LEFT MIDDLE"
+tmux set-option -pt "$QA" @role "✅ QA LEAD — LEFT BOTTOM"
+tmux set-option -w -t "$SESSION:roles" pane-border-status top >/dev/null
+tmux set-option -w -t "$SESSION:roles" pane-border-format ' #[bold,fg=cyan]#{@role} #[default]' >/dev/null
+
+# Monitor window: logs/status are available but do not steal space from role panes.
+tmux new-window -d -t "$SESSION" -n monitor -c "$ROOT" "$feed_cmd"
+tmux split-window -t "$SESSION:monitor" -h -c "$ROOT" "$status_cmd"
+tmux select-layout -t "$SESSION:monitor" even-horizontal >/dev/null
+tmux select-pane -t "$SESSION:monitor.0" -T feed
+tmux select-pane -t "$SESSION:monitor.1" -T status
+
+# Default the user-facing window to the clean role grid.
+tmux select-window -t "$SESSION:roles"
+tmux select-pane -t "$ORCH"
+
+sleep "${COCKPIT_CLAUDE_START_DELAY:-6}"
+send_initial() {
+  local pane_id="$1"
+  local role="$2"
+  local role_file="$3"
+  local inbox="$4"
+  tmux send-keys -t "$pane_id" "You are the webapp workspace $role. Read $role_file, ORCHESTRATION.md, .agent-cockpit/INSTRUCTIONS.md, and .agent-cockpit/workspaces/webapp/WORKSPACE.md. Then run ./.agent-cockpit/bin/status and ./.agent-cockpit/bin/mail inbox $inbox. Wait for orchestrator/Hermes instructions. Use .agent-cockpit/bin/task, mail, and report as canonical state." Enter
+}
+
+send_initial "$ORCH" orchestrator .agent-cockpit/roles/orchestrator.md orchestrator
+send_initial "$FRONT" frontend-lead .agent-cockpit/roles/frontend-lead.md frontend-lead
+send_initial "$BACK" backend-lead .agent-cockpit/roles/backend-lead.md backend-lead
+send_initial "$QA" qa-lead .agent-cockpit/roles/qa-lead.md qa-lead
+
+# Open visible iTerm window if available. If Automation permissions block this, tmux still runs.
+if [[ "${COCKPIT_OPEN_ITERM:-1}" == "1" ]]; then
+  osascript >/dev/null 2>&1 <<OSA || true
+tell application "iTerm2"
+  activate
+  create window with default profile
+  tell current session of current window
+    write text "cd '$ROOT' && tmux attach -t '$SESSION'"
+  end tell
+end tell
+OSA
+fi
+
+echo "started tmux session: $SESSION"
+echo "main roles: cd $ROOT && tmux attach -t $SESSION:roles"
+echo "monitor logs: Ctrl-b n, or tmux switch-client -t $SESSION:monitor"
+printf '\nRoles panes:\n'
+tmux list-panes -t "$SESSION:roles" -F '#{pane_index} #{pane_id} #{pane_title} #{pane_current_command} #{pane_current_path}'
+printf '\nMonitor panes:\n'
+tmux list-panes -t "$SESSION:monitor" -F '#{pane_index} #{pane_id} #{pane_title} #{pane_current_command} #{pane_current_path}'

@@ -1,0 +1,6 @@
+state/
+shared/
+__pycache__/
+*.pyc
+*.bak
+.agent-cockpit.bak.*

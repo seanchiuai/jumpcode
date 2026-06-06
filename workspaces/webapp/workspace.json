@@ -1,0 +1,31 @@
+{
+  "workspace_id": "webapp",
+  "name": "Webapp",
+  "description": "First local MacBook orchestration workspace for web application projects.",
+  "workspace_root": "/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp",
+  "cockpit_metadata_root": "/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/workspaces/webapp",
+  "default_participants": [
+    "hermes",
+    "orchestrator",
+    "frontend-lead",
+    "backend-lead",
+    "qa-lead"
+  ],
+  "routing": {
+    "human_or_hermes": ["orchestrator"],
+    "orchestrator": ["frontend-lead", "backend-lead", "qa-lead"],
+    "leads": ["orchestrator"]
+  },
+  "canonical_state": [
+    ".agent-cockpit/state/runs.jsonl",
+    ".agent-cockpit/state/tasks.jsonl",
+    ".agent-cockpit/state/messages.jsonl",
+    ".agent-cockpit/state/reports.jsonl"
+  ],
+  "role_prompts": {
+    "orchestrator": ".agent-cockpit/roles/orchestrator.md",
+    "frontend-lead": ".agent-cockpit/roles/frontend-lead.md",
+    "backend-lead": ".agent-cockpit/roles/backend-lead.md",
+    "qa-lead": ".agent-cockpit/roles/qa-lead.md"
+  }
+}
