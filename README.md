@@ -1,104 +1,103 @@
 # Local Agent Cockpit Orchestration
 
 This directory is the local, project-owned orchestration layer for `workspace-macbook`.
-It is intentionally small: no daemon, no database, no cloud dependency.
+It is intentionally small: no daemon, no database, no cloud dependency. It owns only the
+*delivery* layer — visible panes, live wake, and a durable dispatch log. Projects and
+tasks live in **Linear**, not here.
 
-## Core primitives
+For canonical terms see [`CONTEXT.md`](CONTEXT.md); for the decisions behind the design
+see [`docs/adr/`](docs/adr/) (0001–0004). Those are the authority if anything here
+conflicts.
 
-- `run` — top-level orchestration session ledger.
-- `task` — durable task registry.
-- `mail` — structured inter-agent mailbox.
-- `report` — machine-readable `DONE` / `BLOCKED` reports.
+## The one mental model
 
-Source of truth is append-only JSONL:
+> Human + Hermes drive the **orchestrator**, which commands its **team leads**, which
+> invoke general **subagents** as a tool. **Projects and tasks live in Linear.** The
+> cockpit only moves messages between visible panes and remembers what was said.
 
-```text
-.agent-cockpit/state/runs.jsonl
-.agent-cockpit/state/tasks.jsonl
-.agent-cockpit/state/messages.jsonl
-.agent-cockpit/state/reports.jsonl
+## Core primitive: the dispatch
+
+A **dispatch** (ADR 0002) is one directed message that does two things at once:
+
+- **Delivered live** — a prompt is injected ("wake") into the recipient's tmux pane,
+  targeted by its stable `@cockpit_role` option, so the agent gets to work immediately.
+- **Appended to the durable dispatch log** — so a restarted agent, or Human/Hermes, can
+  reconstruct what was asked and what happened.
+
+There is a single CLI verb, `dispatch`:
+
+```bash
+# send (live wake + durable log)
+./.agent-cockpit/bin/dispatch send \
+  --from <role> --to <role> \
+  [--project <LINEAR-PROJECT>] [--task <LINEAR-ISSUE>] \
+  [--subject "<subject>"] \
+  [--kind request|reply|report-done|report-blocked|notice] \
+  [--no-wake] \
+  "<body>"
+
+# inspect
+./.agent-cockpit/bin/dispatch inbox <role> [--json]   # dispatches addressed to a role
+./.agent-cockpit/bin/dispatch show <dispatch-id> [--json]
+./.agent-cockpit/bin/dispatch log [N]                 # human-readable feed (default 40)
 ```
 
+Default `--kind` is `request`. Use `reply` to answer one, `notice` for an FYI,
+`report-done`/`report-blocked` when closing out a task. `--no-wake` logs without
+injecting (scripted/batch use); normal sends always wake.
+
+## State
+
+The only state file is append-only JSONL:
+
+```text
+.agent-cockpit/state/dispatches.jsonl
+```
+
+(plus an internal `state/counters.json` for id reservation and a `state/.lock`).
 Human-readable activity is mirrored to:
 
 ```text
 .agent-cockpit/shared/conversation.log
 ```
 
-## Instructional context
-
-For Hermes/MacBook and future agent sessions, read these before using or modifying the tool:
-
-```text
-/Users/seanchiu/Desktop/workspace-macbook/ORCHESTRATION.md
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/INSTRUCTIONS.md
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/HANDOFF.md
-```
-
-This is a core tool for durable coordination. Use it when work involves multiple agents, visible cockpit roles, task ownership, blockers, Brainy handoffs, Claude Code/Codex/OpenCode workers, or any project that may survive context compaction.
-
-## Quick start
-
-```bash
-# Start a run
-./.agent-cockpit/bin/run start \
-  --goal "Build BridgeSwarm-like local orchestration" \
-  --participant orchestrator \
-  --participant backend-lead \
-  --participant frontend-lead \
-  --participant qa-lead
-
-# Create a task
-./.agent-cockpit/bin/task create \
-  --title "Implement mailbox protocol" \
-  --owner backend-lead \
-  --criteria "Inbox lists messages addressed to the lead" \
-  --criteria "Replies preserve task/thread id"
-
-# Send a message
-./.agent-cockpit/bin/mail send \
-  --from orchestrator \
-  --to backend-lead \
-  --task task-YYYYMMDD-001 \
-  --subject "Start implementation" \
-  "Please implement the mailbox protocol."
-
-# Read inbox
-./.agent-cockpit/bin/mail inbox backend-lead
-
-# Report done
-./.agent-cockpit/bin/report done task-YYYYMMDD-001 \
-  --from backend-lead \
-  --summary "Implemented JSONL-backed mailbox" \
-  --work "Added mail send/inbox/reply/show" \
-  --check "python3 -m py_compile .agent-cockpit/bin/cockpit:pass:compiled"
-
-# Report blocked
-./.agent-cockpit/bin/report blocked task-YYYYMMDD-001 \
-  --from backend-lead \
-  --blocker "Need scope decision" \
-  --why "Two possible designs" \
-  --tried "Reviewed current scripts" \
-  --need-from orchestrator
-
-# Summarize current run
-./.agent-cockpit/bin/status
-```
-
 ## Convenience wrappers
 
-- `ask <agent> <message...>` logs a mailbox message from `COCKPIT_FROM` or `hermes`.
-  If `COCKPIT_TMUX_SESSION` is set and a tmux pane title matches the agent name, it also injects a visible cockpit message.
-- `convo [lines]` tails the human-readable conversation log.
-- `status` renders the current run summary.
+- `status` — alias for `dispatch log` (the recent dispatch feed).
+- `convo [lines]` — tails the human-readable conversation log (default 80).
+- `start-webapp` — launches the `webapp` workspace tmux grid (fresh agents).
+
+## Where work lives: Linear
+
+A **project** is a Linear project; a **task** is a Linear issue (ADR 0003). Agents read
+and update them via the Linear MCP. The cockpit keeps **no** local copy of project/task state.
+"Done" is informal: update the Linear issue and send a `report-done` dispatch.
+
+## Roles and topology
+
+- **Orchestrator** — one per workspace, the single accountable agent; a visible right
+  pane. Receives goals from Human/Hermes, decomposes into Linear issues, commands leads.
+- **Team leads** — durable, repo-specific accountable agents (e.g. frontend-lead,
+  backend-lead, qa-lead); visible left panes, launched without `-p`.
+- **Subagents** — general, repo-agnostic Claude Code subagents (e.g. a code reviewer) a
+  lead invokes as a tool. Not panes, not an accountability layer.
+
+Topology is hub-and-spoke (ADR 0001): Human may type into any pane (orchestrator or any
+lead); Hermes talks only to the orchestrator; there is no lead↔lead channel — a lead
+asks the orchestrator to **relay**.
+
+## Continuity: always fresh
+
+Launching a workspace always starts clean Claude agents with no session resume (ADR
+0004). A fresh agent reconstructs context from the durable sources — Linear and the
+dispatch log. "Close workspace" = close the window; the saved config persists.
 
 ## Design constraints
 
-- Keep visible panes for durable accountability roles only: orchestrator and leads.
-- Specialists/subagents should be launched internally by the responsible lead, not as permanent panes.
-- Keep machine-readable state in JSONL; avoid relying on tmux pane scraping for correctness.
-- Use only `DONE` and `BLOCKED` reports for v1.
-- Liveness and eval/rating are deferred. For now, `last message/report timestamp` and `checks_run` inside reports are enough.
+- A local `workspace-macbook` tool, not a BuilderBase repo tool; not in system root.
+- Visible panes are durable accountability roles only (orchestrator and leads).
+- Subagents are invoked internally by the responsible lead, not run as permanent panes.
+- v1 has no liveness daemon and no eval/rating harness (both deferred).
 
 ## Tests
 

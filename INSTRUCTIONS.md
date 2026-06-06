@@ -1,27 +1,33 @@
 # Agent Cockpit Instructions
 
-This file is the local operator manual for Hermes/MacBook and any visible Claude Code lead panes.
+The local operator manual for Hermes/MacBook and any visible Claude Code pane (the
+orchestrator and team leads). Canonical terms live in [`CONTEXT.md`](CONTEXT.md); the
+reasoning lives in [`docs/adr/`](docs/adr/); the shared interaction rules for leads live
+in [`roles/_PROTOCOL.md`](roles/_PROTOCOL.md).
 
-## Mandatory use cases
+## When to use the cockpit
 
-Use `.agent-cockpit` whenever work needs durable orchestration:
+Use it whenever coordination needs to be **delivered live and remembered**:
 
-- multi-agent work
-- visible cockpit work
-- work involving orchestrator/leads/subagents
-- tasks that need owners, acceptance criteria, blockers, or handoff
-- work likely to span context compaction or multiple sessions
-- coordination with Brainy or another agent process
-- anything described as BridgeSwarm-like orchestration
+- multi-agent work across visible panes (orchestrator / leads / their subagents)
+- work likely to span context compaction or a fresh relaunch
+- any time an agent needs to be woken to act, or a message needs to survive in the log
 
-For tiny one-shot answers, do not create orchestration events.
+For tiny one-shot answers, do not send dispatches.
+
+## Where work lives: Linear, not here
+
+A **project** is a Linear project; a **task** is a Linear issue (ADR 0003). Read and
+write them with the Linear MCP. There is **no local task/project/run registry** — the
+cockpit owns only delivery (wake) and the dispatch log. "Done" is informal: update the
+Linear issue and report via dispatch.
 
 ## Source of truth
 
-Machine-readable source of truth:
+Machine-readable dispatch record:
 
 ```text
-.agent-cockpit/state/*.jsonl
+.agent-cockpit/state/dispatches.jsonl
 ```
 
 Human-readable feed:
@@ -30,45 +36,67 @@ Human-readable feed:
 .agent-cockpit/shared/conversation.log
 ```
 
-`mail` is canonical for communication. `ask` is just a transport helper.
-
 ## Command contract
 
-All commands should be run from:
+Run commands from the workspace root:
 
 ```bash
 cd /Users/seanchiu/Desktop/workspace-macbook
 ```
 
-Commands:
+The single verb is `dispatch`:
 
 ```bash
-./.agent-cockpit/bin/run current
-./.agent-cockpit/bin/run start --goal "..."
-./.agent-cockpit/bin/task create --title "..." --owner backend-lead
-./.agent-cockpit/bin/task list
-./.agent-cockpit/bin/mail send --from orchestrator --to backend-lead --task task-... "..."
-./.agent-cockpit/bin/mail inbox backend-lead
-./.agent-cockpit/bin/report done task-... --from backend-lead --summary "..."
-./.agent-cockpit/bin/report blocked task-... --from backend-lead --blocker "..." --need-from orchestrator
-./.agent-cockpit/bin/status
+# send a dispatch (live wake + durable log)
+./.agent-cockpit/bin/dispatch send --from orchestrator --to backend-lead \
+  --task <LINEAR-ISSUE> --subject "Start work" "Please implement X."
+
+# inspect
+./.agent-cockpit/bin/dispatch inbox backend-lead
+./.agent-cockpit/bin/dispatch show <dispatch-id>
+./.agent-cockpit/bin/dispatch log 40
+
+# wrappers
+./.agent-cockpit/bin/status        # = dispatch log
+./.agent-cockpit/bin/convo 80      # tail the conversation feed
+./.agent-cockpit/bin/start-webapp  # launch the webapp grid (fresh)
 ```
 
-## Report discipline
+## Reporting discipline
 
-Only two report outcomes exist in v1:
+When a unit of work finishes or stalls, send a dispatch back to whoever assigned it
+**and** update the Linear issue:
 
-```text
-DONE
-BLOCKED
+```bash
+# done
+./.agent-cockpit/bin/dispatch send --from backend-lead --to orchestrator \
+  --kind report-done --task <LINEAR-ISSUE> \
+  "Summary; what changed; checks run; open concerns; recommended next step."
+
+# blocked
+./.agent-cockpit/bin/dispatch send --from backend-lead --to orchestrator \
+  --kind report-blocked --task <LINEAR-ISSUE> \
+  "Blocker; why; what you tried; what you need from the orchestrator."
 ```
 
-DONE reports should include what changed and checks run. BLOCKED reports should include the blocker, why blocked, what was tried, and who needs to respond.
+A Claude pane cannot poll its own inbox — it acts when woken. After a wake, read the
+full message with `dispatch inbox <role>` / `dispatch show <id>`.
+
+## Topology
+
+Hub-and-spoke (ADR 0001): Human may type into any pane; Hermes talks only to the
+orchestrator; leads report only to the orchestrator and request a **relay** to reach
+another lead. Neither Human nor Hermes addresses subagents directly.
+
+## Continuity
+
+Panes launch fresh with no session resume (ADR 0004). Reconstruct context from Linear
+and the dispatch log (`./.agent-cockpit/bin/dispatch log 40`).
 
 ## Testing after changes
 
 ```bash
 python3 -m py_compile .agent-cockpit/bin/cockpit
-bash -n .agent-cockpit/bin/run .agent-cockpit/bin/task .agent-cockpit/bin/mail .agent-cockpit/bin/report .agent-cockpit/bin/ask .agent-cockpit/bin/convo .agent-cockpit/bin/status
+bash -n .agent-cockpit/bin/dispatch .agent-cockpit/bin/convo .agent-cockpit/bin/status .agent-cockpit/bin/start-webapp
 python3 .agent-cockpit/tests/test_cockpit.py
 ```

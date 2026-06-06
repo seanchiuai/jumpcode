@@ -88,7 +88,13 @@ sleep "${COCKPIT_CLAUDE_START_DELAY:-6}"
 send_initial() {
   local pane_id="$1"
   local role="$2"
-  tmux send-keys -t "$pane_id" "You are the webapp workspace $role. Read your charter .agent-cockpit/roles/$role.md and the shared protocol .agent-cockpit/roles/_PROTOCOL.md. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: ./.agent-cockpit/bin/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with ./.agent-cockpit/bin/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY." Enter
+  # Send the prompt text and the Enter as SEPARATE send-keys calls. A combined
+  # `send-keys "...text..." Enter` is unreliable right after Claude's TUI starts — the
+  # Enter can land before the input is ready and the prompt sits unsubmitted. Two calls
+  # (with a beat between) is what makes wake_pane reliable; mirror it here.
+  tmux send-keys -t "$pane_id" -- "You are the webapp workspace $role. Read your charter .agent-cockpit/roles/$role.md and the shared protocol .agent-cockpit/roles/_PROTOCOL.md. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: ./.agent-cockpit/bin/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with ./.agent-cockpit/bin/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY."
+  sleep 0.4
+  tmux send-keys -t "$pane_id" Enter
 }
 
 send_initial "$ORCH" orchestrator

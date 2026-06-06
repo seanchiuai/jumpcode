@@ -2,29 +2,37 @@
 
 ## What this is
 
-A minimal local orchestration system for `workspace-macbook`, modeled after the useful core of BridgeSwarm without copying proprietary BridgeSpace code.
+A minimal local orchestration system for `workspace-macbook`. It owns only the delivery
+layer — visible panes, live wake, and a durable dispatch log. Projects and tasks live in
+Linear. See [`CONTEXT.md`](CONTEXT.md) for canonical terms and [`docs/adr/`](docs/adr/)
+for the decisions.
 
-## Built primitives
+## Core primitive
 
 ```text
-run     top-level run ledger
-任务/task    task registry
-mail    structured mailbox
-report  machine-readable DONE/BLOCKED reports
+dispatch   one directed message that is BOTH delivered live (wake into the
+           recipient's pane) AND appended to the durable dispatch log
 ```
 
-All state is append-only JSONL under `.agent-cockpit/state/`.
+The only state file is append-only JSONL under `.agent-cockpit/state/`:
+
+```text
+.agent-cockpit/state/dispatches.jsonl
+```
+
+(plus internal `state/counters.json` and `state/.lock`). Human-readable feed:
+`.agent-cockpit/shared/conversation.log`.
 
 ## Current command surface
 
 ```bash
-./.agent-cockpit/bin/run start|current|note|checkpoint|summary
-./.agent-cockpit/bin/task create|list|show|start|done|block
-./.agent-cockpit/bin/mail send|inbox|show|reply
-./.agent-cockpit/bin/report done|blocked
-./.agent-cockpit/bin/ask <agent> <message...>
+./.agent-cockpit/bin/dispatch send --from R --to R [--project P] [--task T] \
+    [--subject S] [--kind request|reply|report-done|report-blocked|notice] [--no-wake] BODY
+./.agent-cockpit/bin/dispatch inbox R [--json]
+./.agent-cockpit/bin/dispatch show DID [--json]
+./.agent-cockpit/bin/dispatch log [N]
+./.agent-cockpit/bin/status        # = dispatch log
 ./.agent-cockpit/bin/convo [lines]
-./.agent-cockpit/bin/status
 ./.agent-cockpit/bin/start-webapp
 ```
 
@@ -36,49 +44,45 @@ The first configured workspace is `webapp`:
 .agent-cockpit/workspaces/webapp/WORKSPACE.md
 .agent-cockpit/workspaces/webapp/workspace.json
 .agent-cockpit/workspaces/webapp/LAUNCH_PROMPTS.md
-workspaces/webapp/README.md
 ```
 
-Visible role prompts are:
+Roles are thin **charters** plus one shared protocol:
 
 ```text
+.agent-cockpit/roles/_PROTOCOL.md
 .agent-cockpit/roles/orchestrator.md
 .agent-cockpit/roles/frontend-lead.md
 .agent-cockpit/roles/backend-lead.md
 .agent-cockpit/roles/qa-lead.md
 ```
 
-`start-webapp` uses two tmux windows:
+`start-webapp` builds one tmux session with two windows:
 
 ```text
-macbook-webapp:roles    four Claude Code role panes only
+macbook-webapp:roles    four Claude Code panes (launched fresh, no -p on leads)
                         orchestrator = full-height right pane
                         leads = stacked left column
 macbook-webapp:monitor  feed/status logs when needed
 ```
 
-The orchestrator pane has a stable tmux border label: `🧭 ORCHESTRATOR — RIGHT SIDE`. Use the border label/location rather than normal pane title; Claude Code changes pane titles while it works.
+Each pane carries a machine-readable `@cockpit_role` option (e.g. `orchestrator`,
+`backend-lead`) which is how `dispatch send` targets the right pane for a wake — Claude
+overwrites the visible pane title, so wake targeting never relies on it.
 
 ## Important design decisions
 
-- No liveness daemon in v1.
-- No eval/rating harness in v1.
-- Reports include `checks_run` so eval can be layered later.
-- Durable visible roles should stay at orchestrator/lead level.
-- Ephemeral engineers/specialists should be spawned inside Claude Code by leads, not as permanent cockpit panes.
-- `mail` is the source of truth. `ask` is only a delivery/logging convenience wrapper.
+- Projects and tasks live in **Linear** (ADR 0003); no local task/run/project registry.
+- A **dispatch** unifies live wake + durable log (ADR 0002), replacing the old mailbox.
+- Topology is hub-and-spoke with the orchestrator as hub (ADR 0001).
+- Workspaces always launch **fresh** — no session resume (ADR 0004).
+- Durable visible roles stay at orchestrator/lead level; subagents are invoked by leads
+  as a tool, not run as permanent panes.
+- v1 has no liveness daemon and no eval/rating harness (deferred).
 
 ## Verification
 
-Tests:
-
 ```bash
 python3 .agent-cockpit/tests/test_cockpit.py
-```
-
-Syntax checks:
-
-```bash
 python3 -m py_compile .agent-cockpit/bin/cockpit
-bash -n .agent-cockpit/bin/run .agent-cockpit/bin/task .agent-cockpit/bin/mail .agent-cockpit/bin/report .agent-cockpit/bin/ask .agent-cockpit/bin/convo .agent-cockpit/bin/status
+bash -n .agent-cockpit/bin/dispatch .agent-cockpit/bin/convo .agent-cockpit/bin/status .agent-cockpit/bin/start-webapp
 ```

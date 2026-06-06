@@ -1,37 +1,38 @@
 # Webapp Workspace
 
-This is the first local orchestration workspace managed by MacBook's `.agent-cockpit`.
+The first local orchestration workspace managed by MacBook's `.agent-cockpit`. For
+canonical terms see [`../../CONTEXT.md`](../../CONTEXT.md); for the decisions see
+[`../../docs/adr/`](../../docs/adr/).
 
 ## Purpose
 
-Coordinate development of web applications through a visible accountable team:
+Coordinate development of web applications through a visible, accountable team:
 
 ```text
-Sean/Hermes
+Sean / Hermes
   -> orchestrator
       -> frontend-lead
       -> backend-lead
       -> qa-lead
 ```
 
-Leads may launch ephemeral Claude Code/Codex/OpenCode subagents internally, but only the orchestrator and leads are durable cockpit participants.
+Leads may invoke general, repo-agnostic Claude Code **subagents** as a tool, but only the
+orchestrator and leads are durable cockpit panes. Hermes drives the orchestrator only;
+Sean may type into any pane.
 
-The visible cockpit uses two tmux windows:
+The visible cockpit uses one tmux session with two windows:
 
 ```text
 roles    four Claude Code role panes only
          left column: frontend-lead / backend-lead / qa-lead
          right side: orchestrator, full height
-monitor  feed + status logs, available when needed but not stealing role-pane space
+monitor  feed + status logs, available but not stealing role-pane space
 ```
 
-The orchestrator is deliberately always on the **right side** and has a tmux pane-border label:
-
-```text
-🧭 ORCHESTRATOR — RIGHT SIDE
-```
-
-Claude Code may overwrite normal pane titles, so the stable human indicator is the tmux border label, not the application title.
+The orchestrator is always on the **right side**. Each pane carries a stable
+`@cockpit_role` option (e.g. `orchestrator`, `backend-lead`) — that is how `dispatch`
+targets a pane for a wake. Claude overwrites visible pane titles, so wake targeting never
+relies on the title; a human-readable `@role` border label is shown for people.
 
 Switch windows with `Ctrl-b n` / `Ctrl-b p`, or attach directly:
 
@@ -40,7 +41,8 @@ tmux attach -t macbook-webapp:roles
 tmux switch-client -t macbook-webapp:monitor
 ```
 
-When an actual app/repo is chosen, put or link it under this directory and create tasks through `.agent-cockpit/bin/task`.
+When an app/repo is chosen, put or link it under this directory; create work as Linear
+issues (the cockpit keeps no local copy of project/task state).
 
 ## Local paths
 
@@ -56,9 +58,10 @@ Cockpit metadata:
 /Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/workspaces/webapp
 ```
 
-Role prompts:
+Role charters + shared protocol:
 
 ```text
+/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/_PROTOCOL.md
 /Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/orchestrator.md
 /Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/frontend-lead.md
 /Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/backend-lead.md
@@ -67,22 +70,28 @@ Role prompts:
 
 ## Operating rules
 
-1. Hermes/user talks to the orchestrator by default.
-2. Orchestrator creates/assigns tasks and mails leads.
-3. Leads report back to orchestrator with `DONE` or `BLOCKED` reports.
-4. The mailbox/task/run/report JSONL files are the source of truth.
-5. Visible panes are accountability roles, not every specialist/engineer.
-6. Do not rely on tmux pane scraping as canonical state.
+1. Hermes talks to the orchestrator by default; Sean may type into any pane.
+2. The orchestrator decomposes goals into Linear issues and dispatches leads.
+3. Leads close the loop with `report-done` / `report-blocked` dispatches and update the
+   Linear issue.
+4. Projects and tasks live in Linear; the dispatch log (`state/dispatches.jsonl`) is the
+   durable record of who said what.
+5. Visible panes are accountability roles (orchestrator + leads); subagents are invoked
+   by leads, not run as permanent panes.
+6. There is no lead↔lead channel — a lead asks the orchestrator to relay.
 
-## Standard run bootstrap
+## Launching
 
 ```bash
 cd /Users/seanchiu/Desktop/workspace-macbook
-./.agent-cockpit/bin/run start \
-  --goal "<webapp goal>" \
-  --participant hermes \
-  --participant orchestrator \
-  --participant frontend-lead \
-  --participant backend-lead \
-  --participant qa-lead
+./.agent-cockpit/bin/start-webapp
+```
+
+This launches fresh Claude agents (no session resume). Each pane reorients from its
+charter, the shared protocol, Linear, and the dispatch log
+(`./.agent-cockpit/bin/dispatch log 40`). Give the orchestrator a goal with:
+
+```bash
+./.agent-cockpit/bin/dispatch send --from hermes --to orchestrator \
+  --project <LINEAR-PROJECT> --subject "<webapp goal>" "<details>"
 ```

@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-06-06):** This audit predates the grilled-design rebuild. The dispatch rewrite and Linear-as-system-of-record (see CONTEXT.md + docs/adr/0001–0004 + docs/plans/2026-06-06-cockpit-rebuild.md) resolved or obsoleted most items here. Kept for history.
+
 # Agent Cockpit — Code Audit & Roadmap
 
 Date: 2026-06-06. Author: Hermes (dev takeover). Status: review only, no system changes made.

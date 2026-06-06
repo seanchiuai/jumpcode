@@ -17,10 +17,7 @@
     "leads": ["orchestrator"]
   },
   "canonical_state": [
-    ".agent-cockpit/state/runs.jsonl",
-    ".agent-cockpit/state/tasks.jsonl",
-    ".agent-cockpit/state/messages.jsonl",
-    ".agent-cockpit/state/reports.jsonl"
+    ".agent-cockpit/state/dispatches.jsonl"
   ],
   "role_prompts": {
     "orchestrator": ".agent-cockpit/roles/orchestrator.md",
