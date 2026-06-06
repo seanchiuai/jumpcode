@@ -282,19 +282,34 @@ def cmd_dispatch(args: argparse.Namespace, home: Path) -> int:
 
 # --- health check -----------------------------------------------------------
 
-# A Claude TUI shows "esc to interrupt" in its status line only while working;
-# a numbered/confirm prompt means it is waiting on the human; otherwise it is idle.
-_BUSY_MARKER = "esc to interrupt"
-_WAITING_MARKERS = ("Do you want", "❯ 1.", "1. Yes", "Allow this")
+# Per-runtime status-line markers. Health reads a pane's @cockpit_runtime to pick the
+# right set. Claude and Codex overlap heavily (both surface "esc to interrupt" while
+# working and numbered "1. Yes" approval prompts), but keep them separate so future
+# divergence — or a third runtime — is a data edit, not a code change.
+_RUNTIME_MARKERS = {
+    "claude": {
+        "busy": ("esc to interrupt",),
+        "waiting": ("Do you want", "❯ 1.", "1. Yes", "Allow this"),
+    },
+    "codex": {
+        # busy ("Working … esc to interrupt") is TO-VERIFY on 0.137.0-alpha.4 (see design doc).
+        "busy": ("esc to interrupt",),
+        "waiting": ("Do you trust", "1. Yes", "› 1.", "Allow command"),
+    },
+}
 
 
-def pane_state(capture_text: str) -> str:
-    """Classify a captured Claude pane screen as 'working' | 'waiting' | 'idle'."""
-    if _BUSY_MARKER in capture_text:
+def pane_state(capture_text: str, runtime: str = "claude") -> str:
+    """Classify a captured agent pane as 'working' | 'waiting' | 'idle' for its runtime.
+
+    An unknown/empty runtime falls back to the claude marker set (the markers overlap, so
+    this is safe and keeps health useful even if @cockpit_runtime was never set).
+    """
+    markers = _RUNTIME_MARKERS.get(runtime) or _RUNTIME_MARKERS["claude"]
+    if any(m in capture_text for m in markers["busy"]):
         return "working"
-    for marker in _WAITING_MARKERS:
-        if marker in capture_text:
-            return "waiting"
+    if any(m in capture_text for m in markers["waiting"]):
+        return "waiting"
     return "idle"
 
 
