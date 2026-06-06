@@ -115,6 +115,19 @@ exact convention:
 `health` counts `start` minus `end` per role, so an unmatched `start` shows as an active
 subagent. Keep names stable between the start and end so they pair up.
 
+### Runtime note (Claude Code vs Codex)
+
+Leads behave identically regardless of which runtime fills their pane (set per role via
+`role_runtimes` in the workspace config). Two caveats:
+
+- **Subagents are optional.** A Codex lead may not spawn subagents the way Claude Code
+  does. The `subagent:start`/`subagent:end` self-report convention is advisory — absence
+  of subagents is normal, not an error.
+- **Linear access depends on the runtime's MCP.** Linear is the system of record. A Codex
+  lead can only read/update Linear if `~/.codex/config.toml` has a `[mcp_servers.linear]`
+  entry. If yours does not, report progress via `dispatch` and let the orchestrator make
+  the Linear writes.
+
 ## Guardrails are soft (v1)
 
 Your charter names the territory you own and what to leave alone. These are
