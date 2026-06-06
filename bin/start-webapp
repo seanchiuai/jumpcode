@@ -70,18 +70,26 @@ ws = json.load(open(sys.argv[1]))
 print(ws.get("role_emojis", {}).get("orchestrator", "🧭"))
 PY
 )
+ORCH_RUNTIME=$(python3 - "$WS_JSON" <<'PY'
+import json, sys
+ws = json.load(open(sys.argv[1]))
+print(ws.get("role_runtimes", {}).get("orchestrator", "claude"))
+PY
+)
 
 # Build the lead list in declaration order, excluding orchestrator/hermes/human.
 # Each line is: role <TAB> prompt_file <TAB> emoji
-LEAD_ROLES=(); LEAD_PROMPTS=(); LEAD_EMOJIS=()
-while IFS=$'\t' read -r role pf emoji; do
+LEAD_ROLES=(); LEAD_PROMPTS=(); LEAD_EMOJIS=(); LEAD_RUNTIMES=()
+while IFS=$'\t' read -r role pf emoji runtime; do
   [[ -z "$role" ]] && continue
   LEAD_ROLES+=("$role"); LEAD_PROMPTS+=("$pf"); LEAD_EMOJIS+=("$emoji")
+  LEAD_RUNTIMES+=("${runtime:-claude}")
 done < <(python3 - "$WS_JSON" <<'PY'
 import json, sys
 ws = json.load(open(sys.argv[1]))
 prompts = ws.get("role_prompts", {})
 emojis = ws.get("role_emojis", {})
+runtimes = ws.get("role_runtimes", {})
 pool = ["🧩", "📦", "🔭", "🛰", "🧪", "⚙", "📚", "🧰", "🔬", "🗂"]
 order = list(prompts.keys()) + list(ws.get("default_participants", []))
 seen = set()
@@ -94,7 +102,8 @@ for role in order:
     if not em:
         em = pool[fb % len(pool)]
         fb += 1
-    print("%s\t%s\t%s" % (role, prompts.get(role, ".agent-cockpit/roles/%s.md" % role), em))
+    rt = runtimes.get(role, "claude")
+    print("%s\t%s\t%s\t%s" % (role, prompts.get(role, ".agent-cockpit/roles/%s.md" % role), em, rt))
 PY
 )
 
