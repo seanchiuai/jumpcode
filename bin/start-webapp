@@ -99,7 +99,10 @@ PY
 )
 
 # Orchestrator pane: the fixed right column.
-ORCH=$(tmux new-session -d -P -F '#{pane_id}' -s "$SESSION" -n roles -c "$ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT")")
+# Create at a generous virtual size so a tall left column of leads has room to split;
+# tmux resizes to the client when one attaches. (A tiny default size makes split-window
+# fail once there are several leads.)
+ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${COCKPIT_COLS:-260}" -y "${COCKPIT_ROWS:-72}" -s "$SESSION" -n roles -c "$ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT")")
 
 # Lead panes: the first opens the left column; each subsequent one stacks below the
 # previous. Order and count follow the workspace; positions are incidental, not roles.
@@ -108,9 +111,11 @@ PREV=""
 for i in "${!LEAD_ROLES[@]}"; do
   role="${LEAD_ROLES[$i]}"; pf="${LEAD_PROMPTS[$i]}"; emoji="${LEAD_EMOJIS[$i]}"
   if [[ -z "$PREV" ]]; then
-    pane=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" "$(agent_cmd "$role" "$pf")")
+    pane=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" "$(agent_cmd "$role" "$pf")") \
+      || { echo "warn: no room for lead '$role' — skipping (increase COCKPIT_ROWS)" >&2; continue; }
   else
-    pane=$(tmux split-window -P -F '#{pane_id}' -t "$PREV" -v -c "$ROOT" "$(agent_cmd "$role" "$pf")")
+    pane=$(tmux split-window -P -F '#{pane_id}' -t "$PREV" -v -c "$ROOT" "$(agent_cmd "$role" "$pf")") \
+      || { echo "warn: no room for lead '$role' — skipping (increase COCKPIT_ROWS)" >&2; continue; }
   fi
   tmux select-pane -t "$pane" -T "$emoji $role"
   # @role = human-facing border label (emoji + domain, no fixed slot).
