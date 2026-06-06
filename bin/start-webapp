@@ -64,6 +64,12 @@ tmux set-option -pt "$ORCH" @role "🧭 ORCHESTRATOR — RIGHT SIDE"
 tmux set-option -pt "$FRONT" @role "🎨 FRONTEND LEAD — LEFT TOP"
 tmux set-option -pt "$BACK" @role "🛠 BACKEND LEAD — LEFT MIDDLE"
 tmux set-option -pt "$QA" @role "✅ QA LEAD — LEFT BOTTOM"
+# Machine-readable role id for wake targeting. The pretty @role above is for humans;
+# Claude overwrites pane titles, so wake_pane targets @cockpit_role instead.
+tmux set-option -pt "$ORCH" @cockpit_role "orchestrator"
+tmux set-option -pt "$FRONT" @cockpit_role "frontend-lead"
+tmux set-option -pt "$BACK" @cockpit_role "backend-lead"
+tmux set-option -pt "$QA" @cockpit_role "qa-lead"
 tmux set-option -w -t "$SESSION:roles" pane-border-status top >/dev/null
 tmux set-option -w -t "$SESSION:roles" pane-border-format ' #[bold,fg=cyan]#{@role} #[default]' >/dev/null
 
