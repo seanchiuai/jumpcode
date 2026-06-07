@@ -363,6 +363,51 @@ def _tmux_capture(pane_id: str) -> str:
         return ""
 
 
+def _tmux_capture_scroll(pane_id: str, lines: int) -> str:
+    """Capture the last `lines` rows of a pane, including scrollback (-S -N)."""
+    try:
+        return subprocess.run(
+            ["tmux", "capture-pane", "-p", "-t", pane_id, "-S", f"-{lines}"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return ""
+
+
+def cmd_peek(args: argparse.Namespace, home: Path) -> int:
+    """Read-only window into a role's pane — the orchestrator's eyes (monitoring design).
+
+    Resolves the role via the same @cockpit_role/session machinery as wake, then prints
+    `capture-pane` scrollback so the caller can judge mid-work vs. idle vs. error vs. dead
+    shell. Never sends keys: to *act*, use `dispatch send` (which wakes). Fails with a
+    clear message — never a traceback — when the session or pane isn't found.
+    """
+    session = resolve_session()
+    if not session:
+        print("peek: no cockpit session — set COCKPIT_TMUX_SESSION or run inside the "
+              "workspace tmux session.", file=sys.stderr)
+        return 1
+    try:
+        panes_text = subprocess.run(
+            ["tmux", "list-panes", "-t", session, "-F", "#{pane_id}\t#{@cockpit_role}"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print(f"peek: tmux session '{session}' not found (workspace not running?).",
+              file=sys.stderr)
+        return 1
+    pane = resolve_pane(panes_text, args.role)
+    if not pane:
+        print(f"peek: no pane for role '{args.role}' in session '{session}'.",
+              file=sys.stderr)
+        return 1
+    out = _tmux_capture_scroll(pane, args.lines)
+    sys.stdout.write(out)
+    if out and not out.endswith("\n"):
+        sys.stdout.write("\n")
+    return 0
+
+
 def cmd_health(args: argparse.Namespace, home: Path) -> int:
     session = resolve_session()
     dispatches = events(home, "dispatch")
@@ -479,6 +524,10 @@ def build_parser() -> argparse.ArgumentParser:
     health = sub.add_parser("health", help="per-role liveness / busy / subagent snapshot")
     health.add_argument("--json", action="store_true")
 
+    peek = sub.add_parser("peek", help="read-only view of a role's pane (never sends keys)")
+    peek.add_argument("role")
+    peek.add_argument("lines", nargs="?", type=int, default=50)
+
     return parser
 
 
@@ -491,6 +540,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_dispatch(args, home)
     if args.cmd == "health":
         return cmd_health(args, home)
+    if args.cmd == "peek":
+        return cmd_peek(args, home)
     parser.error("unknown command")
     return 2
 

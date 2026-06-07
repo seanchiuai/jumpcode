@@ -144,5 +144,29 @@ class DispatchCliTests(unittest.TestCase):
         self.assertEqual(len(ids), 5)
 
 
+class PeekTests(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.tmp_path = Path(self.tmpdir.name)
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_peek_without_session_fails_gracefully(self):
+        # No COCKPIT_TMUX_SESSION and no $TMUX (run_cmd clears both) -> no session.
+        # peek must exit non-zero with a clear message, never a traceback.
+        r = run_cmd(self.tmp_path, "peek", "backend-lead", check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn("session", (r.stdout + r.stderr).lower())
+
+    def test_peek_accepts_optional_line_count(self):
+        # The lines arg parses as an int and does not crash the CLI (still no
+        # session here, so it exits gracefully rather than capturing anything).
+        r = run_cmd(self.tmp_path, "peek", "backend-lead", "120", check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("Traceback", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

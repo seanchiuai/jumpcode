@@ -42,7 +42,28 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
   "<request + acceptance criteria + what report you expect>"
 ```
 
-## 4. Interaction rules
+## 4. Monitoring & recovery
+
+You own **watching your leads** — a dispatch confirms delivery (`woke`), not completion.
+After you dispatch work, check back rather than assuming it finished. Your two tools:
+
+```bash
+./.agent-cockpit/bin/peek <role> [lines]   # read a lead's pane (read-only; never wakes)
+./.agent-cockpit/bin/dispatch log 40       # what you asked vs. what came back
+```
+
+- **Reading a `peek`:** an advancing spinner/timer = **working** (wait); a static empty
+  `❯` prompt = **idle / finished-its-turn** (likely a silent finish — ask it to report);
+  an error/quota banner = **errored**; a bare shell prompt (no `claude`/`codex`) =
+  **crashed**.
+- **Conservative recovery:** for a transient error or a lead idle-without-reporting,
+  **re-wake it** — `dispatch send --from orchestrator --to <role> --task <T> "status?
+  continue/retry SEA-…"`. If it still fails after ~2 nudges, or the failure is
+  non-transient (auth/quota exhausted, crashed pane, a bug in the cockpit CLI itself),
+  **escalate to Sean** with the diagnosis you read from the pane. Do **not** auto-answer
+  permission dialogs, respawn panes, or edit the cockpit tooling — that is Hermes's job.
+
+## 5. Interaction rules
 
 See `_PROTOCOL.md` for the dispatch model, wake, reporting, topology, and fresh-launch
 recovery. Glossary: `../CONTEXT.md`. Decisions: `../docs/adr/`.

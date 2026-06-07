@@ -97,7 +97,12 @@ Hermes or the orchestrator can snapshot the whole team at any time:
 ```bash
 ./.agent-cockpit/bin/health          # per-role: alive/stopped · working/waiting/idle · last-seen · subagents
 ./.agent-cockpit/bin/health --json   # same, machine-readable
+./.agent-cockpit/bin/peek <role> [n] # read-only view of one role's pane (never wakes it)
 ```
+
+`health` is the whole-team snapshot; `peek` reads a single pane's recent output when you
+need to see *what* a lead is actually doing (mid-work, idle, errored, crashed). The
+orchestrator uses `peek` to monitor and recover — see its charter.
 
 `health` reads liveness and busy/idle state from your tmux pane directly. But your
 **subagents run in-process** and are invisible from outside — so leads must self-report
