@@ -7,8 +7,7 @@ canonical terms see [`../../CONTEXT.md`](../../CONTEXT.md); for the decisions se
 ## Purpose
 
 Coordinate development of web applications through a visible, accountable team. The set
-of leads is discovered from prompt files in `.agent-cockpit/roles/` (any number, any
-domain) — only the orchestrator is fixed. The current team:
+of leads is discovered from prompt files: central `$COCKPIT_HOME/roles` is the base set and repo-local `$WORKSPACE_ROOT/.agent-cockpit/roles` overlays central prompts by canonical role id. Any number/domain is allowed; only the orchestrator is fixed. The current team:
 
 ```text
 Sean / Hermes
@@ -20,9 +19,7 @@ Sean / Hermes
       -> 🔌 mcp-lead
 ```
 
-To change the team, add/remove prompt files under the target repo's `.agent-cockpit/roles/`
-(preferred) or the central cockpit `../../roles/` fallback, then relaunch. No roster JSON
-needs to be updated.
+To change the team, add/remove prompt files in central `../../roles/` or overlay the same canonical id under the target repo's `.agent-cockpit/roles/`, then relaunch. `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and no roster JSON needs to be updated.
 
 Leads may invoke general, repo-agnostic Claude Code **subagents** as a tool, but only the
 orchestrator and leads are durable cockpit panes. Hermes drives the orchestrator only;
@@ -83,10 +80,7 @@ Role charters + shared protocol (preferred repo-local location):
 /Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/🔌 mcp-lead.md
 ```
 
-`start-webapp` discovers prompts from the repo-local `.agent-cockpit/roles/` folder first,
-then falls back to `/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/`. This
-lets each repo carry its own team charters/prompts without copying cockpit binaries or
-runtime state into that repo.
+`start-webapp` calls `cockpit roles discover --workspace webapp --json`. Discovery starts with central `/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/`, then overlays any repo-local `.agent-cockpit/roles/` prompts with the same canonical ids. A repo-local `_PROTOCOL.md` overrides the central protocol when present; otherwise the central protocol is used. This lets each repo carry custom charters/prompts without copying cockpit binaries or runtime state into that repo.
 
 ## Operating rules
 

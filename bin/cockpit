@@ -28,6 +28,168 @@ EVENT_FILES = {
 
 DISPATCH_KINDS = ["request", "reply", "report-done", "report-blocked", "notice"]
 
+ROLE_ID_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+KNOWN_RUNTIMES = {"claude", "codex"}
+RESERVED_NON_ROLES = {"hermes", "human"}
+
+
+class RoleDiscoveryError(ValueError):
+    pass
+
+
+def role_id_from_stem(stem: str) -> str:
+    """Return canonical role id from a prompt filename stem.
+
+    Supports display prefixes such as "🎨 frontend-lead" while keeping plain
+    filenames like "frontend-lead" unchanged. The returned id is validated by
+    discover_roles().
+    """
+    parts = stem.split(maxsplit=1)
+    if len(parts) == 2 and re.search(r"[A-Za-z0-9]", parts[1]) and not re.match(r"[A-Za-z0-9]", parts[0]):
+        return parts[1]
+    return stem
+
+
+def _workspace_json_candidates(home: Path, workspace: str) -> List[Path]:
+    candidates = [home / "workspaces" / workspace / "workspace.json"]
+    if home.name == ".agent-cockpit":
+        candidates.append(home.parent / "workspaces" / workspace / "workspace.json")
+    return candidates
+
+
+def workspace_json_path(home: Path, workspace: str) -> Path:
+    for candidate in _workspace_json_candidates(home, workspace):
+        if candidate.exists():
+            return candidate
+    return _workspace_json_candidates(home, workspace)[0]
+
+
+def load_workspace_settings(home: Path, workspace: str) -> Dict[str, Any]:
+    path = workspace_json_path(home, workspace)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise RoleDiscoveryError(f"invalid workspace settings JSON {path}: {e}") from e
+    if not isinstance(data, dict):
+        raise RoleDiscoveryError(f"workspace settings must be a JSON object: {path}")
+    return data
+
+
+def resolve_workspace_root(home: Path, workspace: str, settings: Dict[str, Any]) -> Path:
+    default_base = home.parent if home.name == ".agent-cockpit" else home
+    value = settings.get("workspace_root", str(default_base / "workspaces" / workspace))
+    root = Path(str(value)).expanduser()
+    if not root.is_absolute():
+        root = default_base / root
+    return root.resolve()
+
+
+def _scan_role_source(source: Path, label: str) -> Dict[str, Dict[str, Any]]:
+    roles: Dict[str, Dict[str, Any]] = {}
+    if not source.exists():
+        return roles
+    if not source.is_dir():
+        raise RoleDiscoveryError(f"role source is not a directory: {source}")
+    for path in sorted(source.glob("*.md"), key=lambda p: p.name):
+        stem = path.stem
+        if stem.startswith("_"):
+            continue
+        rid = role_id_from_stem(stem)
+        if not ROLE_ID_RE.match(rid):
+            raise RoleDiscoveryError(f"invalid role id '{rid}' from {label} prompt {path.name}; expected {ROLE_ID_RE.pattern}")
+        if rid in RESERVED_NON_ROLES:
+            continue
+        if rid in roles:
+            raise RoleDiscoveryError(
+                f"duplicate role id '{rid}' within {label} roles: {roles[rid]['prompt']} and {path}"
+            )
+        roles[rid] = {
+            "id": rid,
+            "display": stem,
+            "prompt": str(path.resolve()),
+            "runtime": "claude",
+            "kind": "orchestrator" if rid == "orchestrator" else "lead",
+            "_source": label,
+        }
+    return roles
+
+
+def discover_roles(home: Path, workspace: str) -> Dict[str, Any]:
+    settings = load_workspace_settings(home, workspace)
+    workspace_root = resolve_workspace_root(home, workspace, settings)
+    central_roles = (home / "roles").resolve()
+    local_roles = (workspace_root / ".agent-cockpit" / "roles").resolve()
+
+    central = _scan_role_source(central_roles, "central")
+    local = _scan_role_source(local_roles, "repo-local")
+
+    merged: Dict[str, Dict[str, Any]] = {rid: dict(role) for rid, role in central.items()}
+    for rid, role in local.items():
+        merged[rid] = dict(role)
+
+    if "orchestrator" not in merged:
+        raise RoleDiscoveryError("missing required role prompt for canonical id 'orchestrator'")
+
+    local_protocol = local_roles / "_PROTOCOL.md"
+    central_protocol = central_roles / "_PROTOCOL.md"
+    if local_protocol.exists():
+        protocol = local_protocol.resolve()
+    elif central_protocol.exists():
+        protocol = central_protocol.resolve()
+    else:
+        raise RoleDiscoveryError(f"missing shared protocol: expected {local_protocol} or {central_protocol}")
+
+    runtime_overrides = settings.get("role_runtimes", {}) or {}
+    if not isinstance(runtime_overrides, dict):
+        raise RoleDiscoveryError("workspace setting 'role_runtimes' must be an object")
+    for rid, runtime_value in runtime_overrides.items():
+        if not ROLE_ID_RE.match(str(rid)):
+            raise RoleDiscoveryError(f"invalid role_runtimes key '{rid}'; expected canonical role id")
+        runtime = str(runtime_value)
+        if runtime not in KNOWN_RUNTIMES:
+            raise RoleDiscoveryError(f"unknown runtime '{runtime}' for role '{rid}' — use one of: {', '.join(sorted(KNOWN_RUNTIMES))}")
+        if str(rid) not in merged:
+            raise RoleDiscoveryError(f"role_runtimes references unknown role '{rid}'")
+
+    roles_out: List[Dict[str, Any]] = []
+    for rid in sorted(merged):
+        role = dict(merged[rid])
+        runtime = str(runtime_overrides.get(rid, role.get("runtime") or "claude"))
+        if runtime not in KNOWN_RUNTIMES:
+            raise RoleDiscoveryError(f"unknown runtime '{runtime}' for role '{rid}' — use one of: {', '.join(sorted(KNOWN_RUNTIMES))}")
+        role["runtime"] = runtime
+        role.pop("_source", None)
+        roles_out.append(role)
+
+    return {
+        "workspace": workspace,
+        "workspace_root": str(workspace_root),
+        "protocol": str(protocol),
+        "roles": roles_out,
+    }
+
+
+def cmd_roles(args: argparse.Namespace, home: Path) -> int:
+    if args.roles_cmd != "discover":
+        return 2
+    try:
+        payload = discover_roles(home, args.workspace)
+    except RoleDiscoveryError as e:
+        print(f"roles discover: {e}", file=sys.stderr)
+        return 1
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"workspace: {payload['workspace']}")
+        print(f"workspace_root: {payload['workspace_root']}")
+        print(f"protocol: {payload['protocol']}")
+        print("roles:")
+        for role in payload["roles"]:
+            print(f"  {role['id']:<16} {role['runtime']:<7} {role['kind']:<12} {role['display']}  {role['prompt']}")
+    return 0
+
 
 def resolve_pane(panes_text: str, role: str) -> Optional[str]:
     """Map a canonical role to a tmux pane id.
@@ -118,6 +280,8 @@ def cockpit_home() -> Path:
     if override:
         return Path(override).expanduser().resolve()
     cwd = Path.cwd().resolve()
+    if (cwd / "roles").is_dir() and (cwd / "bin" / "cockpit").exists():
+        return cwd
     existing = cwd / ".agent-cockpit"
     if existing.exists() or cwd.name != ".agent-cockpit":
         return existing
@@ -675,6 +839,12 @@ def build_parser() -> argparse.ArgumentParser:
     dst = dsub.add_parser("status", help="open loops: requests with no matching report")
     dst.add_argument("--json", action="store_true")
 
+    roles = sub.add_parser("roles", help="discover/validate workspace roles")
+    rsub = roles.add_subparsers(dest="roles_cmd", required=True)
+    rd = rsub.add_parser("discover", help="discover validated roles for a workspace")
+    rd.add_argument("--workspace", required=True)
+    rd.add_argument("--json", action="store_true")
+
     health = sub.add_parser("health", help="per-role liveness / busy / subagent snapshot")
     health.add_argument("--json", action="store_true")
 
@@ -692,6 +862,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     if args.cmd == "dispatch":
         return cmd_dispatch(args, home)
+    if args.cmd == "roles":
+        return cmd_roles(args, home)
     if args.cmd == "health":
         return cmd_health(args, home)
     if args.cmd == "peek":

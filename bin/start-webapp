@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/Users/seanchiu/Desktop/workspace-macbook"
-COCKPIT_HOME="$ROOT/.agent-cockpit"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -d "/Users/seanchiu/Desktop/workspace-macbook" ]]; then
+  DEFAULT_ROOT="/Users/seanchiu/Desktop/workspace-macbook"
+else
+  DEFAULT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+ROOT="${COCKPIT_ROOT:-$DEFAULT_ROOT}"
+if [[ -z "${COCKPIT_HOME:-}" ]]; then
+  if [[ -x "$SCRIPT_DIR/cockpit" && "$SCRIPT_DIR" == "$ROOT/bin" ]]; then
+    COCKPIT_HOME="$ROOT"          # source checkout layout
+  else
+    COCKPIT_HOME="$ROOT/.agent-cockpit"  # installed workspace layout
+  fi
+fi
 COCKPIT_BIN="$COCKPIT_HOME/bin"
 SESSION="${COCKPIT_TMUX_SESSION:-macbook-webapp}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
@@ -21,20 +33,6 @@ runtime_program() {
 }
 
 cd "$ROOT"
-
-if ! command -v tmux >/dev/null 2>&1; then
-  echo "tmux is required" >&2
-  exit 1
-fi
-
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-  if [[ "$KILL_EXISTING" == "1" ]]; then
-    tmux kill-session -t "$SESSION"
-  else
-    echo "session already exists: $SESSION" >&2
-    exit 2
-  fi
-fi
 
 agent_cmd() {
   local role="$1"
@@ -56,137 +54,65 @@ exec "$program"
 EOF
 }
 
-feed_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; export COCKPIT_HOME="/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit"; printf "\\033]2;feed\\033\\\\"; touch "$COCKPIT_HOME/shared/conversation.log"; clear; echo "conversation feed (press Ctrl-b n/p to switch windows)"; tail -n 120 -f "$COCKPIT_HOME/shared/conversation.log"'
-status_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; export COCKPIT_HOME="/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit"; printf "\\033]2;status\\033\\\\"; while true; do clear; echo "cockpit status (updates every 5s)"; date; "$COCKPIT_HOME/bin/status" || true; sleep 5; done'
+feed_cmd="cd '$ROOT'; export COCKPIT_HOME='$COCKPIT_HOME'; printf '\\033]2;feed\\033\\\\'; touch \"\$COCKPIT_HOME/shared/conversation.log\"; clear; echo 'conversation feed (press Ctrl-b n/p to switch windows)'; tail -n 120 -f \"\$COCKPIT_HOME/shared/conversation.log\""
+status_cmd="cd '$ROOT'; export COCKPIT_HOME='$COCKPIT_HOME'; printf '\\033]2;status\\033\\\\'; while true; do clear; echo 'cockpit status (updates every 5s)'; date; \"\$COCKPIT_HOME/bin/status\" || true; sleep 5; done"
 
 # The ONLY fixed rule: the orchestrator owns the full-height RIGHT column. Team leads
-# are discovered from the workspace prompt folder: add/remove a role prompt file and
-# relaunch. No team roster JSON needs to be kept in sync.
+# are discovered by the centralized cockpit role-discovery command from central prompts
+# plus repo-local overlays. No team roster JSON needs to be kept in sync.
 WORKSPACE="${COCKPIT_WORKSPACE:-webapp}"
-WS_JSON=".agent-cockpit/workspaces/$WORKSPACE/workspace.json"
+DRY_RUN="${COCKPIT_DRY_RUN:-0}"
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=1 ;;
+    *) echo "unknown argument: $arg" >&2; exit 2 ;;
+  esac
+done
 
-WORKSPACE_ROOT=$(python3 - "$WS_JSON" "$ROOT" "$WORKSPACE" <<'PY'
-import json, sys
-from pathlib import Path
-ws_path = Path(sys.argv[1])
-root = Path(sys.argv[2])
-workspace = sys.argv[3]
-ws = json.load(ws_path.open()) if ws_path.exists() else {}
-value = ws.get("workspace_root", str(root / "workspaces" / workspace))
-p = Path(value).expanduser()
-if not p.is_absolute():
-    p = root / p
-print(p)
-PY
-)
-
-resolve_workspace_path() {
-  python3 - "$WS_JSON" "$ROOT" "$WORKSPACE_ROOT" "$1" <<'PY'
-import sys
-from pathlib import Path
-_, ws_json, root_s, workspace_root_s, value = sys.argv
-root = Path(root_s)
-workspace_root = Path(workspace_root_s)
-p = Path(value).expanduser()
-if p.is_absolute():
-    print(p)
-    raise SystemExit
-# Prefer repo-local paths so prompts can live with the code. Fall back to cockpit-root
-# paths for central/shared prompts and legacy workspaces.
-repo_candidate = workspace_root / p
-root_candidate = root / p
-print(repo_candidate if repo_candidate.exists() else root_candidate)
-PY
-}
-
-# Dedicated prompt folder: repo-local wins, central cockpit roles are fallback.
-if [[ -d "$WORKSPACE_ROOT/.agent-cockpit/roles" ]]; then
-  PROMPT_DIR="$WORKSPACE_ROOT/.agent-cockpit/roles"
-else
-  PROMPT_DIR="$COCKPIT_HOME/roles"
+DISCOVERY_JSON="$(COCKPIT_HOME="$COCKPIT_HOME" "$COCKPIT_BIN/cockpit" roles discover --workspace "$WORKSPACE" --json)"
+if [[ "$DRY_RUN" == "1" ]]; then
+  printf '%s\n' "$DISCOVERY_JSON"
+  exit 0
 fi
 
-find_prompt_for_role() {
-  python3 - "$PROMPT_DIR" "$1" <<'PY'
-import re, sys
-from pathlib import Path
-prompt_dir = Path(sys.argv[1])
-wanted = sys.argv[2]
+# Extract the authoritative launch data from discovery JSON. Each role line is:
+# role <TAB> prompt_file <TAB> display_name <TAB> runtime <TAB> kind
+WORKSPACE_ROOT="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["workspace_root"])' <<<"$DISCOVERY_JSON")"
+SHARED_PROTOCOL="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["protocol"])' <<<"$DISCOVERY_JSON")"
 
-def role_id_from_stem(stem: str) -> str:
-    parts = stem.split(maxsplit=1)
-    if len(parts) == 2 and re.search(r"[A-Za-z0-9]", parts[1]) and not re.match(r"[A-Za-z0-9]", parts[0]):
-        return parts[1]
-    return stem
-
-for path in sorted(prompt_dir.glob("*.md"), key=lambda p: role_id_from_stem(p.stem)):
-    if path.stem.startswith("_"):
-        continue
-    if role_id_from_stem(path.stem) == wanted:
-        print(path)
-        raise SystemExit
-# conventional fallback for a just-created role with default filename
-print(prompt_dir / f"{wanted}.md")
-PY
-}
-
-ORCH_PROMPT="$(find_prompt_for_role orchestrator)"
-SHARED_PROTOCOL="$PROMPT_DIR/_PROTOCOL.md"
-# Team discovery is prompt-folder-driven. Display name comes from the filename stem,
-# e.g. "🎨 frontend-lead.md" -> visible "🎨 frontend-lead" and dispatch id
-# "frontend-lead". If no emoji/name prefix exists, stem is both name and id.
-ORCH_NAME=$(python3 - "$ORCH_PROMPT" <<'PY'
-import sys
-from pathlib import Path
-stem = Path(sys.argv[1]).stem
-print(stem)
-PY
-)
+ORCH_PROMPT=""
+ORCH_NAME="orchestrator"
 ORCH_RUNTIME="claude"
-
-# Build the lead list from prompt files in canonical role-id sort order, excluding
-# orchestrator/_PROTOCOL and other private underscore files.
-# Each line is: role <TAB> prompt_file <TAB> display_name <TAB> runtime
 LEAD_ROLES=(); LEAD_PROMPTS=(); LEAD_NAMES=(); LEAD_RUNTIMES=()
-while IFS=$'	' read -r role pf name runtime; do
+while IFS=$'\t' read -r role pf name runtime kind; do
   [[ -z "$role" ]] && continue
-  LEAD_ROLES+=("$role"); LEAD_PROMPTS+=("$pf"); LEAD_NAMES+=("$name")
-  LEAD_RUNTIMES+=("${runtime:-claude}")
-done < <(python3 - "$PROMPT_DIR" "$WS_JSON" <<'PY'
-import json, re, sys
-from pathlib import Path
-prompt_dir = Path(sys.argv[1])
-ws_path = Path(sys.argv[2])
-ws = json.load(ws_path.open()) if ws_path.exists() else {}
+  if [[ "$kind" == "orchestrator" ]]; then
+    ORCH_PROMPT="$pf"; ORCH_NAME="$name"; ORCH_RUNTIME="$runtime"
+  else
+    LEAD_ROLES+=("$role"); LEAD_PROMPTS+=("$pf"); LEAD_NAMES+=("$name"); LEAD_RUNTIMES+=("$runtime")
+  fi
+done < <(python3 -c 'import json,sys
+for r in json.load(sys.stdin)["roles"]:
+    print("%s\t%s\t%s\t%s\t%s" % (r["id"], r["prompt"], r["display"], r["runtime"], r["kind"]))' <<<"$DISCOVERY_JSON")
 
-def role_id_from_stem(stem: str) -> str:
-    # Allows filenames like "🎨 frontend-lead.md" while keeping dispatch target
-    # "frontend-lead". For "frontend-lead.md", id stays "frontend-lead".
-    parts = stem.split(maxsplit=1)
-    if len(parts) == 2 and re.search(r"[A-Za-z0-9]", parts[1]) and not re.match(r"[A-Za-z0-9]", parts[0]):
-        return parts[1]
-    return stem
+if [[ -z "$ORCH_PROMPT" ]]; then
+  echo "role discovery did not return an orchestrator" >&2
+  exit 1
+fi
 
-runtime_overrides = ws.get("role_runtimes", {})
-if prompt_dir.exists():
-    for path in sorted(prompt_dir.glob("*.md"), key=lambda p: role_id_from_stem(p.stem)):
-        stem = path.stem
-        role = role_id_from_stem(stem)
-        if stem.startswith("_") or role in {"orchestrator", "hermes", "human"}:
-            continue
-        runtime = runtime_overrides.get(role, "claude")
-        print("%s	%s	%s	%s" % (role, path, stem, runtime))
-else:
-    # Backward-compatible fallback for older workspaces with explicit JSON rosters.
-    team_leads = ws.get("team_leads") or []
-    for lead in team_leads:
-        role = lead["id"] if isinstance(lead, dict) else str(lead)
-        name = (lead.get("name") or lead.get("label") or role) if isinstance(lead, dict) else role
-        prompt = (lead.get("prompt") or ".agent-cockpit/roles/%s.md" % role) if isinstance(lead, dict) else ".agent-cockpit/roles/%s.md" % role
-        runtime = (lead.get("runtime") or "claude") if isinstance(lead, dict) else "claude"
-        print("%s	%s	%s	%s" % (role, prompt, name, runtime))
-PY
-)
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "tmux is required" >&2
+  exit 1
+fi
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  if [[ "$KILL_EXISTING" == "1" ]]; then
+    tmux kill-session -t "$SESSION"
+  else
+    echo "session already exists: $SESSION" >&2
+    exit 2
+  fi
+fi
 
 # Validate the program for every runtime this workspace uses, before creating any pane.
 # (Replaces the old single Claude-only check; supports mixed claude/codex teams.)

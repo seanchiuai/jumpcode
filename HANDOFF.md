@@ -34,6 +34,7 @@ The only state file is append-only JSONL under `.agent-cockpit/state/`:
 ./.agent-cockpit/bin/status        # open loops: requests with no matching report (+ pane state)
 ./.agent-cockpit/bin/convo [lines]
 ./.agent-cockpit/bin/start-webapp
+./.agent-cockpit/bin/cockpit roles discover --workspace webapp [--json]
 ```
 
 ## First workspace
@@ -45,8 +46,7 @@ The first configured workspace is `webapp`:
 .agent-cockpit/workspaces/webapp/LAUNCH_PROMPTS.md
 ```
 
-Roles are thin **charters** plus one shared protocol. `start-webapp` discovers the roster
-from the prompt folder; adding/removing a `*.md` charter adds/removes a lead.
+Roles are thin **charters** plus one shared protocol. `start-webapp` consumes the centralized discovery JSON: central `$COCKPIT_HOME/roles` is the base set, repo-local `$WORKSPACE_ROOT/.agent-cockpit/roles` overlays prompts by canonical role id, and a repo-local `_PROTOCOL.md` overrides central only when present. Adding/removing a `*.md` charter adds/removes a lead; `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and contains no roster maps.
 
 ```text
 .agent-cockpit/roles/_PROTOCOL.md
@@ -63,7 +63,7 @@ from the prompt folder; adding/removing a `*.md` charter adds/removes a lead.
 ```text
 macbook-webapp:roles    Claude Code/Codex panes (launched fresh, no -p on leads)
                         orchestrator = full-height right pane
-                        leads = stacked left column
+                        leads = stacked left columns from prompt-folder discovery
 macbook-webapp:monitor  feed/status logs when needed
 ```
 
@@ -84,7 +84,7 @@ overwrites the visible pane title, so wake targeting never relies on it.
 ## Verification
 
 ```bash
-python3 .agent-cockpit/tests/test_cockpit.py
+python3 -m unittest discover -s tests
 python3 -m py_compile .agent-cockpit/bin/cockpit
 bash -n .agent-cockpit/bin/dispatch .agent-cockpit/bin/convo .agent-cockpit/bin/status .agent-cockpit/bin/start-webapp
 ```

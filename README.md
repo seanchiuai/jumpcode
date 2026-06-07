@@ -45,6 +45,7 @@ There is a single CLI verb, `dispatch`:
 # monitor
 ./.agent-cockpit/bin/health [--json]                  # per-role: alive · working/waiting/idle · runtime · subagents
 ./.agent-cockpit/bin/peek <role> [lines]              # read-only view of a role's pane (never wakes it)
+./.agent-cockpit/bin/cockpit roles discover --workspace <name> --json  # validated role discovery
 ```
 
 Default `--kind` is `request`. Use `reply` to answer one, `notice` for an FYI,
@@ -69,7 +70,7 @@ Human-readable activity is mirrored to:
 
 ## Convenience wrappers
 
-- `status` — alias for `dispatch log` (the recent dispatch feed).
+- `status` — alias for `dispatch status` (open loops plus pane state).
 - `convo [lines]` — tails the human-readable conversation log (default 80).
 - `start-webapp` — launches the `webapp` workspace tmux grid (fresh agents).
 
@@ -80,6 +81,8 @@ and update them via the Linear MCP. The cockpit keeps **no** local copy of proje
 "Done" is informal: update the Linear issue and send a `report-done` dispatch.
 
 ## Roles and topology
+
+Role panes are discovered from prompt folders, not roster JSON. Central `$COCKPIT_HOME/roles` is the base set; a repo may add `$WORKSPACE_ROOT/.agent-cockpit/roles` files that overlay central prompts by canonical role id. A repo-local `_PROTOCOL.md` overrides the central protocol when present; otherwise the central `_PROTOCOL.md` is used. `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and must not contain team roster maps.
 
 - **Orchestrator** — one per workspace, the single accountable agent; a visible right
   pane. Receives goals from Human/Hermes, decomposes into Linear issues, commands leads.
@@ -108,5 +111,5 @@ dispatch log. "Close workspace" = close the window; the saved config persists.
 ## Tests
 
 ```bash
-python3 .agent-cockpit/tests/test_cockpit.py
+python3 -m unittest discover -s tests
 ```
