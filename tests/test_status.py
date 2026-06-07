@@ -67,6 +67,18 @@ class OpenRequestsTests(unittest.TestCase):
         opens = cockpit.open_requests(d)
         self.assertEqual(len(opens), 1)
 
+    def test_precise_reply_to_wins_over_fallback_steal(self):
+        # Two same-task requests to one lead; the single report explicitly replies to
+        # the SECOND. Precise linkage must close B and leave A open — a request-by-
+        # request fallback would wrongly let A consume R and report B open.
+        d = [
+            _req("dsp-A", "backend-lead", "SEA-7", "2026-06-07T01:00:00Z"),
+            _req("dsp-B", "backend-lead", "SEA-7", "2026-06-07T02:00:00Z"),
+            _report("dsp-R", "backend-lead", "2026-06-07T03:00:00Z",
+                    task="SEA-7", reply_to="dsp-B"),
+        ]
+        self.assertEqual([r["dispatch_id"] for r in cockpit.open_requests(d)], ["dsp-A"])
+
     def test_blocked_report_also_closes(self):
         d = [
             _req("dsp-1", "backend-lead", "SEA-7", "2026-06-07T01:00:00Z"),

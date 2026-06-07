@@ -232,23 +232,34 @@ def open_requests(dispatches: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             if d.get("type") == "dispatch.sent" and d.get("kind") == "request"]
     reports = [d for d in dispatches
                if d.get("type") == "dispatch.sent" and d.get("kind") in _REPORT_KINDS]
-    used: set = set()
-    opens: List[Dict[str, Any]] = []
+    req_ids = {r.get("dispatch_id") for r in reqs}
+    matched: set = set()  # request ids closed
+    used: set = set()     # report indices consumed
+
+    # Phase 1 — precise links, resolved GLOBALLY before any fallback so a report
+    # explicitly aimed (reply_to) at one request can never be stolen by another's
+    # heuristic match. A report whose reply_to names no request closes nothing.
+    for i, rep in enumerate(reports):
+        rt = rep.get("reply_to")
+        if rt and rt in req_ids and rt not in matched:
+            matched.add(rt); used.add(i)
+
+    # Phase 2 — heuristic fallback for the pre-linkage convention, over UNLINKED
+    # reports only (a report with reply_to is precise-only). Requests walked in order
+    # so concurrent same-task loops pair FIFO.
     for r in reqs:
         rid = r.get("dispatch_id")
-        matched = False
-        for i, rep in enumerate(reports):  # precise: reply_to == request id
-            if i not in used and rep.get("reply_to") and rep.get("reply_to") == rid:
-                used.add(i); matched = True; break
-        if not matched:
-            for i, rep in enumerate(reports):  # fallback: same task, from recipient, later
-                if (i not in used and rep.get("from") == r.get("to")
-                        and rep.get("task") and rep.get("task") == r.get("task")
-                        and (rep.get("created_at") or "") >= (r.get("created_at") or "")):
-                    used.add(i); matched = True; break
-        if not matched:
-            opens.append(r)
-    return opens
+        if rid in matched:
+            continue
+        for i, rep in enumerate(reports):
+            if i in used or rep.get("reply_to"):
+                continue
+            if (rep.get("from") == r.get("to")
+                    and rep.get("task") and rep.get("task") == r.get("task")
+                    and (rep.get("created_at") or "") >= (r.get("created_at") or "")):
+                used.add(i); matched.add(rid); break
+
+    return [r for r in reqs if r.get("dispatch_id") not in matched]
 
 
 def _age_str(iso_ts: Optional[str]) -> str:
