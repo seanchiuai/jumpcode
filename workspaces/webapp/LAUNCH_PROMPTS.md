@@ -18,20 +18,21 @@ is woken automatically. Send messages with $COCKPIT_BIN/dispatch send --from $ro
 --to <role> [--task LINEAR-ID] BODY.
 ```
 
-The roles launched are whatever `workspace.json` declares:
+The roles launched are whatever prompt files exist in the prompt folder:
 
 ```text
-orchestrator    full-height right pane
-frontend-lead   lead pane
-backend-lead    lead pane
-qa-lead         lead pane
-devops-lead     lead pane
-mcp-lead        lead pane
+🧭 orchestrator.md     full-height right pane; dispatch id: orchestrator
+🎨 frontend-lead.md    lead pane; dispatch id: frontend-lead
+🛠 backend-lead.md     lead pane; dispatch id: backend-lead
+✅ qa-lead.md          lead pane; dispatch id: qa-lead
+🚀 devops-lead.md      lead pane; dispatch id: devops-lead
+🔌 mcp-lead.md         lead pane; dispatch id: mcp-lead
 ```
 
-Prompt paths resolve relative to the target repo/workspace root first, then the central
-cockpit root. This is intentional: repo-specific system prompts can live in the repo while
-the cockpit binaries/state stay central and ignored. Each agent then reorients from
+Prompt discovery checks the target repo/workspace root first:
+`$WORKSPACE_ROOT/.agent-cockpit/roles/`, then falls back to the central cockpit
+`$COCKPIT_HOME/roles/`. This is intentional: repo-specific system prompts can live in the
+repo while the cockpit binaries/state stay central and ignored. Each agent then reorients from
 durable sources — its charter, the shared protocol, Linear, and the dispatch log
 (`$COCKPIT_BIN/dispatch log 40`) — and waits to be woken by a dispatch. Leads report back
 with `--kind report-done` / `report-blocked` dispatches to the orchestrator and update the

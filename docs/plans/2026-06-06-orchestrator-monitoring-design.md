@@ -40,7 +40,7 @@ A new read-only command + wrapper:
 
 ### 2. Orchestrator charter — "Monitoring & recovery" section
 
-Add to `roles/orchestrator.md` (and a short pointer in `roles/_PROTOCOL.md`):
+Add to `roles/🧭 orchestrator.md` (and a short pointer in `roles/_PROTOCOL.md`):
 
 - **You own watching your leads.** After you dispatch work, check back rather than
   assuming completion. Your tools: `peek <role>` (read a pane) and `dispatch log` (what
@@ -87,7 +87,7 @@ lead ──dispatch report-done/blocked(wake)──▶ orchestrator   (loop clos
 | Component | Where | Notes |
 |---|---|---|
 | `peek <role> [lines]` | `bin/cockpit` (`cmd_peek`) + `bin/peek` wrapper | reuses `resolve_pane`/`resolve_session`; read-only |
-| Monitoring & recovery | `roles/orchestrator.md` + `roles/_PROTOCOL.md` pointer | conservative posture |
+| Monitoring & recovery | `roles/🧭 orchestrator.md` + `roles/_PROTOCOL.md` pointer | conservative posture |
 
 ## Error handling
 

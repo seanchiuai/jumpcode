@@ -7,7 +7,7 @@ canonical terms see [`../../CONTEXT.md`](../../CONTEXT.md); for the decisions se
 ## Purpose
 
 Coordinate development of web applications through a visible, accountable team. The set
-of leads is **whatever this workspace declares** in `workspace.json` (any number, any
+of leads is discovered from prompt files in `.agent-cockpit/roles/` (any number, any
 domain) — only the orchestrator is fixed. The current team:
 
 ```text
@@ -20,10 +20,9 @@ Sean / Hermes
       -> 🔌 mcp-lead
 ```
 
-To change the team, edit the `team_leads` list in `workspace.json`, add the lead's
-charter under the target repo's `.agent-cockpit/roles/<id>.md` (preferred) or the central
-cockpit `../../roles/<id>.md` fallback, and relaunch. `prompt` and `runtime` are optional
-per-lead overrides; defaults are `.agent-cockpit/roles/<id>.md` and `claude`.
+To change the team, add/remove prompt files under the target repo's `.agent-cockpit/roles/`
+(preferred) or the central cockpit `../../roles/` fallback, then relaunch. No roster JSON
+needs to be updated.
 
 Leads may invoke general, repo-agnostic Claude Code **subagents** as a tool, but only the
 orchestrator and leads are durable cockpit panes. Hermes drives the orchestrator only;
@@ -33,7 +32,7 @@ The visible cockpit uses one tmux session with two windows:
 
 ```text
 roles    one Claude Code pane per role
-         left column: the workspace's leads, stacked (count/order follow workspace.json)
+         left column: discovered leads, stacked (count/order sorted by canonical role id)
          right side: orchestrator, full height
 monitor  feed + status logs, available but not stealing role-pane space
 ```
@@ -43,9 +42,10 @@ The orchestrator is always on the **right side**. Each pane carries a stable
 targets a pane for a wake. Claude overwrites visible pane titles, so wake targeting never
 relies on the title; a human-readable `@role` border label is shown for people.
 
-Visible pane labels come from each `team_leads[]` entry's `name`. Put the emoji directly
-in that name (for example `{ "id": "frontend-lead", "name": "🎨 frontend-lead" }`).
-Keep the `id` emoji-free so CLI dispatch targets stay easy to type and stable.
+Visible pane labels come from prompt filenames. Use `🎨 frontend-lead.md` for a pane named
+`🎨 frontend-lead` with canonical dispatch id `frontend-lead`. Files without an emoji prefix
+also work (`frontend-lead.md` -> id/name `frontend-lead`). Keep the post-emoji id stable so
+CLI dispatch targets stay easy to type.
 
 Switch windows with `Ctrl-b n` / `Ctrl-b p`, or attach directly:
 
@@ -75,18 +75,18 @@ Role charters + shared protocol (preferred repo-local location):
 
 ```text
 /Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/_PROTOCOL.md
-/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/orchestrator.md
-/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/frontend-lead.md
-/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/backend-lead.md
-/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/qa-lead.md
-/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/devops-lead.md
-/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/mcp-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/🧭 orchestrator.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/🎨 frontend-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/🛠 backend-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/✅ qa-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/🚀 devops-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/🔌 mcp-lead.md
 ```
 
-`start-webapp` resolves prompt paths relative to `workspace_root` first, then falls back
-to `/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/`. This lets each
-repo carry its own team charters/prompts without copying cockpit binaries or runtime
-state into that repo.
+`start-webapp` discovers prompts from the repo-local `.agent-cockpit/roles/` folder first,
+then falls back to `/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/`. This
+lets each repo carry its own team charters/prompts without copying cockpit binaries or
+runtime state into that repo.
 
 ## Operating rules
 

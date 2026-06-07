@@ -42,24 +42,26 @@ The first configured workspace is `webapp`:
 
 ```text
 .agent-cockpit/workspaces/webapp/WORKSPACE.md
-.agent-cockpit/workspaces/webapp/workspace.json
 .agent-cockpit/workspaces/webapp/LAUNCH_PROMPTS.md
 ```
 
-Roles are thin **charters** plus one shared protocol:
+Roles are thin **charters** plus one shared protocol. `start-webapp` discovers the roster
+from the prompt folder; adding/removing a `*.md` charter adds/removes a lead.
 
 ```text
 .agent-cockpit/roles/_PROTOCOL.md
-.agent-cockpit/roles/orchestrator.md
-.agent-cockpit/roles/frontend-lead.md
-.agent-cockpit/roles/backend-lead.md
-.agent-cockpit/roles/qa-lead.md
+.agent-cockpit/roles/🧭 orchestrator.md
+.agent-cockpit/roles/🎨 frontend-lead.md
+.agent-cockpit/roles/🛠 backend-lead.md
+.agent-cockpit/roles/✅ qa-lead.md
+.agent-cockpit/roles/🚀 devops-lead.md
+.agent-cockpit/roles/🔌 mcp-lead.md
 ```
 
 `start-webapp` builds one tmux session with two windows:
 
 ```text
-macbook-webapp:roles    four Claude Code panes (launched fresh, no -p on leads)
+macbook-webapp:roles    Claude Code/Codex panes (launched fresh, no -p on leads)
                         orchestrator = full-height right pane
                         leads = stacked left column
 macbook-webapp:monitor  feed/status logs when needed

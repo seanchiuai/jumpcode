@@ -402,9 +402,9 @@ TESTWS=$(mktemp -d)/ws && mkdir -p "$TESTWS"
 # minimal workspace with a mixed team
 cat > /tmp/cockpit-rt-test.json <<'JSON'
 { "default_participants": ["orchestrator","alpha-lead","beta-lead"],
-  "role_prompts": {"orchestrator":".agent-cockpit/roles/orchestrator.md",
-                   "alpha-lead":".agent-cockpit/roles/frontend-lead.md",
-                   "beta-lead":".agent-cockpit/roles/backend-lead.md"},
+  "role_prompts": {"orchestrator":".agent-cockpit/roles/🧭 orchestrator.md",
+                   "alpha-lead":".agent-cockpit/roles/🎨 frontend-lead.md",
+                   "beta-lead":".agent-cockpit/roles/🛠 backend-lead.md"},
   "role_emojis": {},
   "role_runtimes": {"beta-lead":"codex"} }
 JSON
@@ -429,7 +429,7 @@ import json,io
 p="workspaces/_rttest/workspace.json"
 import os; os.makedirs("workspaces/_rttest",exist_ok=True)
 json.dump({"default_participants":["orchestrator","alpha-lead"],
- "role_prompts":{"orchestrator":".agent-cockpit/roles/orchestrator.md","alpha-lead":".agent-cockpit/roles/frontend-lead.md"},
+ "role_prompts":{"orchestrator":".agent-cockpit/roles/🧭 orchestrator.md","alpha-lead":".agent-cockpit/roles/🎨 frontend-lead.md"},
  "role_emojis":{}, "role_runtimes":{"alpha-lead":"gemini"}}, open(p,"w"))
 PY
 CLAUDE_BIN=cat COCKPIT_WORKSPACE=_rttest COCKPIT_TMUX_SESSION=cockpit-rttest2 \
