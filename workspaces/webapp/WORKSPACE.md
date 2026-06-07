@@ -20,10 +20,10 @@ Sean / Hermes
       -> 🔌 mcp-lead
 ```
 
-To change the team, edit `default_participants` / `routing` / `role_prompts` /
-`role_names` in `workspace.json`, add the lead's charter under the target repo's
-`.agent-cockpit/roles/` (preferred) or the central cockpit `../../roles/` fallback, and
-relaunch.
+To change the team, edit the `team_leads` list in `workspace.json`, add the lead's
+charter under the target repo's `.agent-cockpit/roles/<id>.md` (preferred) or the central
+cockpit `../../roles/<id>.md` fallback, and relaunch. `prompt` and `runtime` are optional
+per-lead overrides; defaults are `.agent-cockpit/roles/<id>.md` and `claude`.
 
 Leads may invoke general, repo-agnostic Claude Code **subagents** as a tool, but only the
 orchestrator and leads are durable cockpit panes. Hermes drives the orchestrator only;
@@ -43,9 +43,9 @@ The orchestrator is always on the **right side**. Each pane carries a stable
 targets a pane for a wake. Claude overwrites visible pane titles, so wake targeting never
 relies on the title; a human-readable `@role` border label is shown for people.
 
-Visible pane labels come from `workspace.json` `role_names`. Put the emoji directly in
-the display name there (for example `"frontend-lead": "🎨 frontend-lead"`). Keep the
-canonical role ids emoji-free so CLI dispatch targets stay easy to type and stable.
+Visible pane labels come from each `team_leads[]` entry's `name`. Put the emoji directly
+in that name (for example `{ "id": "frontend-lead", "name": "🎨 frontend-lead" }`).
+Keep the `id` emoji-free so CLI dispatch targets stay easy to type and stable.
 
 Switch windows with `Ctrl-b n` / `Ctrl-b p`, or attach directly:
 

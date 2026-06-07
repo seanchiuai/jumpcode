@@ -5,48 +5,33 @@
   "workspace_root": "/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp",
   "cockpit_metadata_root": "/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/workspaces/webapp",
   "shared_protocol": ".agent-cockpit/roles/_PROTOCOL.md",
-  "default_participants": [
-    "hermes",
-    "orchestrator",
-    "frontend-lead",
-    "backend-lead",
-    "qa-lead",
-    "devops-lead",
-    "mcp-lead"
-  ],
-  "routing": {
-    "human_or_hermes": [
-      "orchestrator"
-    ],
-    "orchestrator": [
-      "frontend-lead",
-      "backend-lead",
-      "qa-lead",
-      "devops-lead",
-      "mcp-lead"
-    ],
-    "leads": [
-      "orchestrator"
-    ]
-  },
   "canonical_state": [
     ".agent-cockpit/state/dispatches.jsonl"
   ],
-  "role_prompts": {
-    "orchestrator": ".agent-cockpit/roles/orchestrator.md",
-    "frontend-lead": ".agent-cockpit/roles/frontend-lead.md",
-    "backend-lead": ".agent-cockpit/roles/backend-lead.md",
-    "qa-lead": ".agent-cockpit/roles/qa-lead.md",
-    "devops-lead": ".agent-cockpit/roles/devops-lead.md",
-    "mcp-lead": ".agent-cockpit/roles/mcp-lead.md"
+  "orchestrator": {
+    "id": "orchestrator",
+    "name": "🧭 orchestrator"
   },
-  "role_names": {
-    "orchestrator": "🧭 orchestrator",
-    "frontend-lead": "🎨 frontend-lead",
-    "backend-lead": "🛠 backend-lead",
-    "qa-lead": "✅ qa-lead",
-    "devops-lead": "🚀 devops-lead",
-    "mcp-lead": "🔌 mcp-lead"
-  },
-  "role_runtimes": {}
+  "team_leads": [
+    {
+      "id": "frontend-lead",
+      "name": "🎨 frontend-lead"
+    },
+    {
+      "id": "backend-lead",
+      "name": "🛠 backend-lead"
+    },
+    {
+      "id": "qa-lead",
+      "name": "✅ qa-lead"
+    },
+    {
+      "id": "devops-lead",
+      "name": "🚀 devops-lead"
+    },
+    {
+      "id": "mcp-lead",
+      "name": "🔌 mcp-lead"
+    }
+  ]
 }

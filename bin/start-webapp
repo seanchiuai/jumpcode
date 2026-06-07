@@ -62,7 +62,7 @@ status_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; export COCKPIT_HOME="/
 # The ONLY fixed rule: the orchestrator owns the full-height RIGHT column. The team
 # leads that fill the LEFT column are whatever THIS workspace declares — any number,
 # any domain — read live from its workspace.json. Nothing here hardcodes specific leads;
-# to change the team, edit the workspace's role_prompts/default_participants and relaunch.
+# to change the team, edit the workspace's team_leads list and relaunch.
 WORKSPACE="${COCKPIT_WORKSPACE:-webapp}"
 WS_JSON=".agent-cockpit/workspaces/$WORKSPACE/workspace.json"
 if [[ ! -f "$WS_JSON" ]]; then
@@ -105,7 +105,8 @@ PY
 ORCH_PROMPT=$(python3 - "$WS_JSON" <<'PY'
 import json, sys
 ws = json.load(open(sys.argv[1]))
-print(ws.get("role_prompts", {}).get("orchestrator", ".agent-cockpit/roles/orchestrator.md"))
+orch = ws.get("orchestrator", {})
+print(orch.get("prompt") or ws.get("role_prompts", {}).get("orchestrator", ".agent-cockpit/roles/orchestrator.md"))
 PY
 )
 ORCH_PROMPT=$(resolve_workspace_path "$ORCH_PROMPT")
@@ -116,18 +117,20 @@ print(ws.get("shared_protocol", ".agent-cockpit/roles/_PROTOCOL.md"))
 PY
 )
 SHARED_PROTOCOL=$(resolve_workspace_path "$SHARED_PROTOCOL")
-# Visible pane labels come from role_names. Keep canonical role ids emoji-free so
-# dispatch/wake targets stay stable; put any emoji directly in the display name.
+# Team config is intentionally data-shaped: one list of leads, each with a stable
+# dispatch id and a human label. Put the emoji in the label/name, not in the CLI target.
 ORCH_NAME=$(python3 - "$WS_JSON" <<'PY'
 import json, sys
 ws = json.load(open(sys.argv[1]))
-print(ws.get("role_names", {}).get("orchestrator", "orchestrator"))
+orch = ws.get("orchestrator", {})
+print(orch.get("name") or ws.get("role_names", {}).get("orchestrator", "orchestrator"))
 PY
 )
 ORCH_RUNTIME=$(python3 - "$WS_JSON" <<'PY'
 import json, sys
 ws = json.load(open(sys.argv[1]))
-print(ws.get("role_runtimes", {}).get("orchestrator", "claude"))
+orch = ws.get("orchestrator", {})
+print(orch.get("runtime") or ws.get("role_runtimes", {}).get("orchestrator", "claude"))
 PY
 )
 
@@ -142,18 +145,28 @@ while IFS=$'\t' read -r role pf name runtime; do
 done < <(python3 - "$WS_JSON" <<'PY'
 import json, sys
 ws = json.load(open(sys.argv[1]))
-prompts = ws.get("role_prompts", {})
-names = ws.get("role_names", {})
-runtimes = ws.get("role_runtimes", {})
-order = list(prompts.keys()) + list(ws.get("default_participants", []))
-seen = set()
-for role in order:
-    if role in ("hermes", "human", "orchestrator") or role in seen:
-        continue
-    seen.add(role)
-    display_name = names.get(role, role)
-    rt = runtimes.get(role, "claude")
-    print("%s\t%s\t%s\t%s" % (role, prompts.get(role, ".agent-cockpit/roles/%s.md" % role), display_name, rt))
+team_leads = ws.get("team_leads") or []
+if team_leads:
+    for lead in team_leads:
+        role = lead["id"] if isinstance(lead, dict) else str(lead)
+        name = (lead.get("name") or lead.get("label") or role) if isinstance(lead, dict) else role
+        prompt = (lead.get("prompt") or ".agent-cockpit/roles/%s.md" % role) if isinstance(lead, dict) else ".agent-cockpit/roles/%s.md" % role
+        runtime = (lead.get("runtime") or "claude") if isinstance(lead, dict) else "claude"
+        print("%s\t%s\t%s\t%s" % (role, prompt, name, runtime))
+else:
+    # Backward-compatible fallback for older workspaces.
+    prompts = ws.get("role_prompts", {})
+    names = ws.get("role_names", {})
+    runtimes = ws.get("role_runtimes", {})
+    order = list(prompts.keys()) + list(ws.get("default_participants", []))
+    seen = set()
+    for role in order:
+        if role in ("hermes", "human", "orchestrator") or role in seen:
+            continue
+        seen.add(role)
+        display_name = names.get(role, role)
+        rt = runtimes.get(role, "claude")
+        print("%s\t%s\t%s\t%s" % (role, prompts.get(role, ".agent-cockpit/roles/%s.md" % role), display_name, rt))
 PY
 )
 
