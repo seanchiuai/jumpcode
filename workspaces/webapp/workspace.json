@@ -15,9 +15,19 @@
     "mcp-lead"
   ],
   "routing": {
-    "human_or_hermes": ["orchestrator"],
-    "orchestrator": ["frontend-lead", "backend-lead", "qa-lead", "devops-lead", "mcp-lead"],
-    "leads": ["orchestrator"]
+    "human_or_hermes": [
+      "orchestrator"
+    ],
+    "orchestrator": [
+      "frontend-lead",
+      "backend-lead",
+      "qa-lead",
+      "devops-lead",
+      "mcp-lead"
+    ],
+    "leads": [
+      "orchestrator"
+    ]
   },
   "canonical_state": [
     ".agent-cockpit/state/dispatches.jsonl"
@@ -30,13 +40,13 @@
     "devops-lead": ".agent-cockpit/roles/devops-lead.md",
     "mcp-lead": ".agent-cockpit/roles/mcp-lead.md"
   },
-  "role_emojis": {
-    "orchestrator": "🧭",
-    "frontend-lead": "🎨",
-    "backend-lead": "🛠",
-    "qa-lead": "✅",
-    "devops-lead": "🚀",
-    "mcp-lead": "🔌"
+  "role_names": {
+    "orchestrator": "🧭 orchestrator",
+    "frontend-lead": "🎨 frontend-lead",
+    "backend-lead": "🛠 backend-lead",
+    "qa-lead": "✅ qa-lead",
+    "devops-lead": "🚀 devops-lead",
+    "mcp-lead": "🔌 mcp-lead"
   },
   "role_runtimes": {}
 }

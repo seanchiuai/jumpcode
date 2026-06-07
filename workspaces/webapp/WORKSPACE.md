@@ -21,7 +21,7 @@ Sean / Hermes
 ```
 
 To change the team, edit `default_participants` / `routing` / `role_prompts` /
-`role_emojis` in `workspace.json`, add the lead's charter under the target repo's
+`role_names` in `workspace.json`, add the lead's charter under the target repo's
 `.agent-cockpit/roles/` (preferred) or the central cockpit `../../roles/` fallback, and
 relaunch.
 
@@ -43,9 +43,9 @@ The orchestrator is always on the **right side**. Each pane carries a stable
 targets a pane for a wake. Claude overwrites visible pane titles, so wake targeting never
 relies on the title; a human-readable `@role` border label is shown for people.
 
-**Every role label carries an emoji** (convention). Set one per role in
-`workspace.json` `role_emojis`; any lead without one is auto-assigned a distinct fallback
-so the requirement always holds.
+Visible pane labels come from `workspace.json` `role_names`. Put the emoji directly in
+the display name there (for example `"frontend-lead": "🎨 frontend-lead"`). Keep the
+canonical role ids emoji-free so CLI dispatch targets stay easy to type and stable.
 
 Switch windows with `Ctrl-b n` / `Ctrl-b p`, or attach directly:
 
