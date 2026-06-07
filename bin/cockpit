@@ -430,11 +430,17 @@ def pane_state(capture_text: str, runtime: str = "claude") -> str:
 
     An unknown/empty runtime falls back to the claude marker set (the markers overlap, so
     this is safe and keeps health useful even if @cockpit_runtime was never set).
+
+    The real "working" signal is the spinner line ('… esc to interrupt'). Claude's
+    auto-mode footer ('⏵⏵ auto mode on … · <hint>') rotates a hint that sometimes reads
+    '· esc to interrupt' even when idle — so that footer line is excluded before scanning,
+    or every auto-mode pane would read as working. (Live-confirmed 2026-06-07, CC 2.1.168.)
     """
     markers = _RUNTIME_MARKERS.get(runtime) or _RUNTIME_MARKERS["claude"]
-    if any(m in capture_text for m in markers["busy"]):
+    scan = "\n".join(ln for ln in capture_text.splitlines() if "auto mode on" not in ln)
+    if any(m in scan for m in markers["busy"]):
         return "working"
-    if any(m in capture_text for m in markers["waiting"]):
+    if any(m in scan for m in markers["waiting"]):
         return "waiting"
     return "idle"
 

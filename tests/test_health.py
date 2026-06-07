@@ -24,6 +24,29 @@ class PaneStateTests(unittest.TestCase):
         screen = "❯ \n⏵⏵ auto mode on (shift+tab to cycle)        40262 tokens\n"
         self.assertEqual(cockpit.pane_state(screen), "idle")
 
+    def test_idle_auto_mode_footer_with_rotating_esc_hint_is_idle(self):
+        # LIVE-CONFIRMED 2026-06-07 (Claude Code 2.1.168): the auto-mode footer rotates
+        # a hint that can read "· esc to interrupt" even at an idle empty composer. That
+        # must NOT be read as the working spinner.
+        screen = (
+            "  ⎿  Tip: Continue your session in Claude Code Desktop with /desktop\n"
+            "──────────────────────────────\n"
+            "❯ \n"
+            "──────────────────────────────\n"
+            "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt          45765 tokens\n"
+        )
+        self.assertEqual(cockpit.pane_state(screen), "idle")
+
+    def test_working_spinner_wins_even_with_auto_mode_footer(self):
+        # When truly working, the spinner line carries 'esc to interrupt' and must win
+        # even though the auto-mode footer (also containing it) is present below.
+        screen = (
+            "✶ Ideating… (36s · ↓ 2.0k tokens · esc to interrupt)\n"
+            "❯ \n"
+            "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt          43470 tokens\n"
+        )
+        self.assertEqual(cockpit.pane_state(screen), "working")
+
     def test_claude_default_runtime_unchanged(self):
         # existing three tests cover claude implicitly; this pins the explicit arg
         screen = "✳ Crunching… (26s · esc to interrupt)\n❯ \n"
