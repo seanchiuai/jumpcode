@@ -13,8 +13,10 @@ COCKPIT = ROOT / ".agent-cockpit" / "bin" / "cockpit"
 def run_cmd(tmp_path, *args, check=True):
     env = os.environ.copy()
     env["COCKPIT_HOME"] = str(tmp_path / ".agent-cockpit")
-    # Never let tests touch a real tmux session.
+    # Never let tests touch a real tmux session: clear both the explicit override
+    # and $TMUX so resolve_session() returns "" and wake_pane() is a no-op.
     env.pop("COCKPIT_TMUX_SESSION", None)
+    env.pop("TMUX", None)
     result = subprocess.run(
         [sys.executable, str(COCKPIT), *args],
         cwd=tmp_path,
@@ -66,6 +68,29 @@ class DispatchCliTests(unittest.TestCase):
             self.tmp_path, "dispatch", "inbox", "backend-lead", "--json"
         ).stdout)
         self.assertEqual([m["dispatch_id"] for m in inbox], [sent["dispatch_id"]])
+
+    def test_woke_flag_is_persisted_to_durable_log(self):
+        # Trigger the real WAKE path (note: no --no-wake). With no tmux session
+        # resolvable, wake_pane() returns False, so woke == False. The delivery
+        # VERDICT is the point: it must be recorded in the durable log, not only
+        # echoed to stdout — otherwise the recovery/feedback layer can never tell
+        # a delivered dispatch from an undelivered one.
+        sent = json.loads(run_cmd(
+            self.tmp_path, "dispatch", "send",
+            "--from", "orchestrator", "--to", "backend-lead",
+            "--task", "ENG-12", "--subject", "Build auth",
+            "Implement the auth endpoints.",
+        ).stdout)
+        # stdout carries the delivery verdict...
+        self.assertIn("woke", sent)
+        self.assertFalse(sent["woke"])  # no tmux session -> not delivered
+
+        # ...and so MUST the durable log line (this is the bug: today `woke` is
+        # set on the event dict AFTER append_event, so the JSONL omits it).
+        logged = read_jsonl(self.tmp_path / ".agent-cockpit" / "state" / "dispatches.jsonl")
+        self.assertEqual(len(logged), 1)
+        self.assertIn("woke", logged[0])
+        self.assertEqual(logged[0]["woke"], sent["woke"])
 
     def test_inbox_only_returns_messages_addressed_to_recipient(self):
         run_cmd(self.tmp_path, "dispatch", "send", "--from", "orchestrator",

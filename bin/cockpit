@@ -231,23 +231,31 @@ def cmd_dispatch(args: argparse.Namespace, home: Path) -> int:
             "reply_to": args.reply_to,
             "created_at": now_iso(),
         }
+        # Resolve the delivery verdict BEFORE persisting, so the durable log records
+        # whether the wake was *verified* (woke) — not merely that a send was attempted.
+        # `None` = delivery not attempted (--no-wake / log-only). Wrapped so a wake
+        # failure still yields woke=False and the dispatch is logged regardless.
+        if args.no_wake:
+            event["woke"] = None
+        else:
+            session = resolve_session()
+            headline = event["subject"] or body[:80]
+            try:
+                event["woke"] = wake_pane(
+                    session,
+                    args.to,
+                    f"[dispatch {event['dispatch_id']} from {event['from']}] {headline} "
+                    f"— full text: ./.agent-cockpit/bin/dispatch show {event['dispatch_id']} "
+                    f"(inbox: ./.agent-cockpit/bin/dispatch inbox {args.to})",
+                )
+            except Exception:
+                event["woke"] = False
         append_event(home, "dispatch", event)
         append_conversation(
             home,
             f"DISPATCH {event['kind']} {event['dispatch_id']} {event['from']} -> {event['to']} "
             f"task={event.get('task') or '-'}: {event['subject'] or event['body'][:80]}",
         )
-        if not args.no_wake:
-            session = resolve_session()
-            headline = event["subject"] or body[:80]
-            woke = wake_pane(
-                session,
-                args.to,
-                f"[dispatch {event['dispatch_id']} from {event['from']}] {headline} "
-                f"— full text: ./.agent-cockpit/bin/dispatch show {event['dispatch_id']} "
-                f"(inbox: ./.agent-cockpit/bin/dispatch inbox {args.to})",
-            )
-            event["woke"] = woke
         print_json(event)
         return 0
     if args.dispatch_cmd == "inbox":
