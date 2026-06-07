@@ -4,6 +4,7 @@
   "description": "First local MacBook orchestration workspace for web application projects.",
   "workspace_root": "/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp",
   "cockpit_metadata_root": "/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/workspaces/webapp",
+  "shared_protocol": ".agent-cockpit/roles/_PROTOCOL.md",
   "default_participants": [
     "hermes",
     "orchestrator",

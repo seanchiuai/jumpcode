@@ -21,7 +21,8 @@ Sean / Hermes
 ```
 
 To change the team, edit `default_participants` / `routing` / `role_prompts` /
-`role_emojis` in `workspace.json`, add the lead's charter under `../../roles/`, and
+`role_emojis` in `workspace.json`, add the lead's charter under the target repo's
+`.agent-cockpit/roles/` (preferred) or the central cockpit `../../roles/` fallback, and
 relaunch.
 
 Leads may invoke general, repo-agnostic Claude Code **subagents** as a tool, but only the
@@ -70,17 +71,22 @@ Cockpit metadata:
 /Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/workspaces/webapp
 ```
 
-Role charters + shared protocol:
+Role charters + shared protocol (preferred repo-local location):
 
 ```text
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/_PROTOCOL.md
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/orchestrator.md
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/frontend-lead.md
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/backend-lead.md
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/qa-lead.md
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/devops-lead.md
-/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/mcp-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/_PROTOCOL.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/orchestrator.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/frontend-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/backend-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/qa-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/devops-lead.md
+/Users/seanchiu/Desktop/workspace-macbook/workspaces/webapp/.agent-cockpit/roles/mcp-lead.md
 ```
+
+`start-webapp` resolves prompt paths relative to `workspace_root` first, then falls back
+to `/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit/roles/`. This lets each
+repo carry its own team charters/prompts without copying cockpit binaries or runtime
+state into that repo.
 
 ## Operating rules
 

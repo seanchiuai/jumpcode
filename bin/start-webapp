@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="/Users/seanchiu/Desktop/workspace-macbook"
+COCKPIT_HOME="$ROOT/.agent-cockpit"
+COCKPIT_BIN="$COCKPIT_HOME/bin"
 SESSION="${COCKPIT_TMUX_SESSION:-macbook-webapp}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CODEX_BIN="${CODEX_BIN:-/Applications/Codex.app/Contents/Resources/codex}"
@@ -42,8 +44,9 @@ agent_cmd() {
   program="$(runtime_program "$runtime")"
   [[ -z "$program" ]] && program="$CLAUDE_BIN"   # safety net; preflight already validated
   cat <<EOF
-cd "$ROOT"
+cd "$WORKSPACE_ROOT"
 export COCKPIT_TMUX_SESSION="$SESSION"
+export COCKPIT_HOME="$COCKPIT_HOME"
 printf '\\033]2;%s\\033\\\\' "$role"
 clear
 printf 'MacBook webapp cockpit role: %s (%s)\\n' "$role" "$runtime"
@@ -53,8 +56,8 @@ exec "$program"
 EOF
 }
 
-feed_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; printf "\\033]2;feed\\033\\\\"; touch .agent-cockpit/shared/conversation.log; clear; echo "conversation feed (press Ctrl-b n/p to switch windows)"; tail -n 120 -f .agent-cockpit/shared/conversation.log'
-status_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; printf "\\033]2;status\\033\\\\"; while true; do clear; echo "cockpit status (updates every 5s)"; date; ./.agent-cockpit/bin/status || true; sleep 5; done'
+feed_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; export COCKPIT_HOME="/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit"; printf "\\033]2;feed\\033\\\\"; touch "$COCKPIT_HOME/shared/conversation.log"; clear; echo "conversation feed (press Ctrl-b n/p to switch windows)"; tail -n 120 -f "$COCKPIT_HOME/shared/conversation.log"'
+status_cmd='cd /Users/seanchiu/Desktop/workspace-macbook; export COCKPIT_HOME="/Users/seanchiu/Desktop/workspace-macbook/.agent-cockpit"; printf "\\033]2;status\\033\\\\"; while true; do clear; echo "cockpit status (updates every 5s)"; date; "$COCKPIT_HOME/bin/status" || true; sleep 5; done'
 
 # The ONLY fixed rule: the orchestrator owns the full-height RIGHT column. The team
 # leads that fill the LEFT column are whatever THIS workspace declares — any number,
@@ -67,12 +70,52 @@ if [[ ! -f "$WS_JSON" ]]; then
   exit 1
 fi
 
+WORKSPACE_ROOT=$(python3 - "$WS_JSON" "$ROOT" <<'PY'
+import json, sys
+from pathlib import Path
+ws = json.load(open(sys.argv[1]))
+root = Path(sys.argv[2])
+value = ws.get("workspace_root", str(root))
+p = Path(value).expanduser()
+if not p.is_absolute():
+    p = root / p
+print(p)
+PY
+)
+
+resolve_workspace_path() {
+  python3 - "$WS_JSON" "$ROOT" "$WORKSPACE_ROOT" "$1" <<'PY'
+import sys
+from pathlib import Path
+_, ws_json, root_s, workspace_root_s, value = sys.argv
+root = Path(root_s)
+workspace_root = Path(workspace_root_s)
+p = Path(value).expanduser()
+if p.is_absolute():
+    print(p)
+    raise SystemExit
+# Prefer repo-local paths so prompts can live with the code. Fall back to cockpit-root
+# paths for central/shared prompts and legacy workspaces.
+repo_candidate = workspace_root / p
+root_candidate = root / p
+print(repo_candidate if repo_candidate.exists() else root_candidate)
+PY
+}
+
 ORCH_PROMPT=$(python3 - "$WS_JSON" <<'PY'
 import json, sys
 ws = json.load(open(sys.argv[1]))
 print(ws.get("role_prompts", {}).get("orchestrator", ".agent-cockpit/roles/orchestrator.md"))
 PY
 )
+ORCH_PROMPT=$(resolve_workspace_path "$ORCH_PROMPT")
+SHARED_PROTOCOL=$(python3 - "$WS_JSON" <<'PY'
+import json, sys
+ws = json.load(open(sys.argv[1]))
+print(ws.get("shared_protocol", ".agent-cockpit/roles/_PROTOCOL.md"))
+PY
+)
+SHARED_PROTOCOL=$(resolve_workspace_path "$SHARED_PROTOCOL")
 # Every role label carries an emoji (a workspace convention). Configured ones win; any
 # lead without one gets a distinct fallback so the requirement always holds.
 ORCH_EMOJI=$(python3 - "$WS_JSON" <<'PY'
@@ -93,6 +136,7 @@ PY
 LEAD_ROLES=(); LEAD_PROMPTS=(); LEAD_EMOJIS=(); LEAD_RUNTIMES=()
 while IFS=$'\t' read -r role pf emoji runtime; do
   [[ -z "$role" ]] && continue
+  pf=$(resolve_workspace_path "$pf")
   LEAD_ROLES+=("$role"); LEAD_PROMPTS+=("$pf"); LEAD_EMOJIS+=("$emoji")
   LEAD_RUNTIMES+=("${runtime:-claude}")
 done < <(python3 - "$WS_JSON" <<'PY'
@@ -140,7 +184,7 @@ done
 # Create at a generous virtual size so a tall left column of leads has room to split;
 # tmux resizes to the client when one attaches. (A tiny default size makes split-window
 # fail once there are several leads.)
-ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${COCKPIT_COLS:-260}" -y "${COCKPIT_ROWS:-72}" -s "$SESSION" -n roles -c "$ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME")")
+ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${COCKPIT_COLS:-260}" -y "${COCKPIT_ROWS:-72}" -s "$SESSION" -n roles -c "$WORKSPACE_ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME")")
 
 # Lead panes laid out in COLUMNS of at most MAX_PER_COL, to the LEFT of the orchestrator.
 # No column holds more than MAX_PER_COL panes; with more leads we add another column
@@ -157,7 +201,7 @@ if (( N > 0 )); then NCOLS=$(( (N + MAX_PER_COL - 1) / MAX_PER_COL )); fi
 #    up ordered [col0][col1]...[orchestrator] left-to-right.
 for (( c=0; c<NCOLS; c++ )); do
   idx=$(( c * MAX_PER_COL ))
-  head=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$ROOT" \
+  head=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$WORKSPACE_ROOT" \
            "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}")") \
     || { echo "warn: no room for lead column $c — raise COCKPIT_COLS" >&2; continue; }
   LEAD_PANE[$idx]=$head
@@ -171,7 +215,7 @@ for (( c=0; c<NCOLS; c++ )); do
   for (( r=1; r<MAX_PER_COL; r++ )); do
     idx=$(( c * MAX_PER_COL + r ))
     if (( idx >= N )); then break; fi
-    pane=$(tmux split-window -P -F '#{pane_id}' -t "$prev" -v -c "$ROOT" \
+    pane=$(tmux split-window -P -F '#{pane_id}' -t "$prev" -v -c "$WORKSPACE_ROOT" \
              "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}")") \
       || { echo "warn: no room for lead '${LEAD_ROLES[$idx]}' — raise COCKPIT_ROWS" >&2; continue; }
     LEAD_PANE[$idx]=$pane
@@ -237,7 +281,7 @@ send_initial() {
   # `send-keys "...text..." Enter` is unreliable right after Claude's TUI starts — the
   # Enter can land before the input is ready and the prompt sits unsubmitted. Two calls
   # (with a beat between) is what makes wake_pane reliable; mirror it here.
-  tmux send-keys -t "$pane_id" -- "You are the $WORKSPACE workspace $role. Read your charter $prompt_file and the shared protocol .agent-cockpit/roles/_PROTOCOL.md. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: ./.agent-cockpit/bin/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with ./.agent-cockpit/bin/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY.${extra:+ }$extra"
+  tmux send-keys -t "$pane_id" -- "You are the $WORKSPACE workspace $role. You are running from repo/workspace root $WORKSPACE_ROOT. Read your charter $prompt_file and the shared protocol $SHARED_PROTOCOL. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: $COCKPIT_BIN/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with $COCKPIT_BIN/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY.${extra:+ }$extra"
   sleep 0.4
   tmux send-keys -t "$pane_id" Enter
 }
