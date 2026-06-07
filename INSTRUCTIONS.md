@@ -51,6 +51,10 @@ The single verb is `dispatch`:
 ./.agent-cockpit/bin/dispatch send --from orchestrator --to backend-lead \
   --task <LINEAR-ISSUE> --subject "Start work" "Please implement X."
 
+# report (close the loop): pair the report to its request with --reply-to
+./.agent-cockpit/bin/dispatch send --from backend-lead --to orchestrator \
+  --kind report-done --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> "Done; …"
+
 # inspect
 ./.agent-cockpit/bin/dispatch inbox backend-lead
 ./.agent-cockpit/bin/dispatch show <dispatch-id>
@@ -58,6 +62,8 @@ The single verb is `dispatch`:
 
 # wrappers
 ./.agent-cockpit/bin/status        # open loops: requests with no matching report (+ pane state)
+./.agent-cockpit/bin/health        # per-role: alive · working/waiting/idle · runtime · subagents
+./.agent-cockpit/bin/peek <role> [n] # read-only view of a role's pane (never wakes it)
 ./.agent-cockpit/bin/convo 80      # tail the conversation feed
 ./.agent-cockpit/bin/start-webapp  # launch the webapp grid (fresh)
 ```

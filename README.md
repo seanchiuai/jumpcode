@@ -40,11 +40,17 @@ There is a single CLI verb, `dispatch`:
 ./.agent-cockpit/bin/dispatch inbox <role> [--json]   # dispatches addressed to a role
 ./.agent-cockpit/bin/dispatch show <dispatch-id> [--json]
 ./.agent-cockpit/bin/dispatch log [N]                 # human-readable feed (default 40)
+./.agent-cockpit/bin/dispatch status [--json]         # open loops: requests with no matching report (+ pane state)
+
+# monitor
+./.agent-cockpit/bin/health [--json]                  # per-role: alive · working/waiting/idle · runtime · subagents
+./.agent-cockpit/bin/peek <role> [lines]              # read-only view of a role's pane (never wakes it)
 ```
 
 Default `--kind` is `request`. Use `reply` to answer one, `notice` for an FYI,
-`report-done`/`report-blocked` when closing out a task. `--no-wake` logs without
-injecting (scripted/batch use); normal sends always wake.
+`report-done`/`report-blocked` when closing out a task — pass `--reply-to <request
+dispatch-id>` on reports so `dispatch status` pairs them and closes the loop. `--no-wake`
+logs without injecting (scripted/batch use); normal sends always wake.
 
 ## State
 
