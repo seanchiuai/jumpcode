@@ -232,16 +232,26 @@ send_initial() {
   local pane_id="$1"
   local role="$2"
   local prompt_file="$3"
+  local extra="${4:-}"
   # Send the prompt text and the Enter as SEPARATE send-keys calls. A combined
   # `send-keys "...text..." Enter` is unreliable right after Claude's TUI starts — the
   # Enter can land before the input is ready and the prompt sits unsubmitted. Two calls
   # (with a beat between) is what makes wake_pane reliable; mirror it here.
-  tmux send-keys -t "$pane_id" -- "You are the $WORKSPACE workspace $role. Read your charter $prompt_file and the shared protocol .agent-cockpit/roles/_PROTOCOL.md. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: ./.agent-cockpit/bin/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with ./.agent-cockpit/bin/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY."
+  tmux send-keys -t "$pane_id" -- "You are the $WORKSPACE workspace $role. Read your charter $prompt_file and the shared protocol .agent-cockpit/roles/_PROTOCOL.md. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: ./.agent-cockpit/bin/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with ./.agent-cockpit/bin/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY.${extra:+ }$extra"
   sleep 0.4
   tmux send-keys -t "$pane_id" Enter
 }
 
-send_initial "$ORCH" orchestrator "$ORCH_PROMPT"
+# Authoritative roster for the orchestrator: the exact leads THIS launch created, so it
+# never falls back to a stale hardcoded list in its charter. Includes each lead's runtime.
+ORCH_ROSTER=""
+for (( i=0; i<N; i++ )); do
+  [[ -z "${LEAD_PANE[$i]:-}" ]] && continue
+  ORCH_ROSTER+="${ORCH_ROSTER:+, }${LEAD_ROLES[$i]} (${LEAD_RUNTIMES[$i]})"
+done
+ORCH_EXTRA="YOUR TEAM LEADS in this workspace are exactly these ${N} and they are ALL yours: ${ORCH_ROSTER}. Treat every one of them as your own lead — do not disown any as belonging to another workspace. Confirm the live roster any time with ./.agent-cockpit/bin/health (every *-lead pane is yours)."
+
+send_initial "$ORCH" orchestrator "$ORCH_PROMPT" "$ORCH_EXTRA"
 for (( i=0; i<N; i++ )); do
   p="${LEAD_PANE[$i]:-}"
   [[ -n "$p" ]] && send_initial "$p" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}"

@@ -9,7 +9,11 @@ the whole. You are the **only relay**: leads cannot talk to each other, so cross
 coordination flows through you. Implement directly only when a task is tiny; otherwise
 delegate to a lead.
 
-Leads in this workspace: `frontend-lead`, `backend-lead`, `qa-lead`.
+Your team leads are **whatever this workspace declares — not a fixed set.** Your launch
+message names your exact roster, and you can see every live lead any time with
+`./.agent-cockpit/bin/health`: **every `*-lead` pane in this session is one of yours.**
+Treat all of them as your team. Never assume a hardcoded list — if a lead appears in
+`health` or dispatches you from within this session, it is yours, not another workspace's.
 
 ## 2. Editable territory & guardrails (soft)
 
