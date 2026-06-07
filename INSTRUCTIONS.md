@@ -57,7 +57,7 @@ The single verb is `dispatch`:
 ./.agent-cockpit/bin/dispatch log 40
 
 # wrappers
-./.agent-cockpit/bin/status        # = dispatch log
+./.agent-cockpit/bin/status        # open loops: requests with no matching report (+ pane state)
 ./.agent-cockpit/bin/convo 80      # tail the conversation feed
 ./.agent-cockpit/bin/start-webapp  # launch the webapp grid (fresh)
 ```

@@ -52,17 +52,21 @@ chat message alone counts.
 ### Reporting
 
 When a task is done or stuck, send a dispatch back to whoever assigned it **and**
-update the Linear issue:
+update the Linear issue. **Always pass `--reply-to <the request's dispatch-id>`** (the id
+shown when the request was sent / in `dispatch inbox`): it is what lets `dispatch status`
+pair your report to its request precisely and close the open loop. Without it, status
+falls back to matching by `--task`, which can't tell two open requests on the same issue
+apart.
 
 ```bash
 # done
 ./.agent-cockpit/bin/dispatch send --from <your-role> --to orchestrator \
-  --kind report-done --task <LINEAR-ISSUE> \
+  --kind report-done --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> \
   "Summary; what changed; checks run; open concerns; recommended next step."
 
 # blocked
 ./.agent-cockpit/bin/dispatch send --from <your-role> --to orchestrator \
-  --kind report-blocked --task <LINEAR-ISSUE> \
+  --kind report-blocked --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> \
   "Blocker; why; what you tried; what you need from the orchestrator."
 ```
 

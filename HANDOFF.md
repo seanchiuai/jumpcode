@@ -31,7 +31,7 @@ The only state file is append-only JSONL under `.agent-cockpit/state/`:
 ./.agent-cockpit/bin/dispatch inbox R [--json]
 ./.agent-cockpit/bin/dispatch show DID [--json]
 ./.agent-cockpit/bin/dispatch log [N]
-./.agent-cockpit/bin/status        # = dispatch log
+./.agent-cockpit/bin/status        # open loops: requests with no matching report (+ pane state)
 ./.agent-cockpit/bin/convo [lines]
 ./.agent-cockpit/bin/start-webapp
 ```

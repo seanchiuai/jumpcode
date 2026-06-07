@@ -215,6 +215,80 @@ def _dispatch_one_liner(d: Dict[str, Any]) -> str:
     )
 
 
+_REPORT_KINDS = ("report-done", "report-blocked")
+
+
+def open_requests(dispatches: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Request dispatches that have no matching report — the open loops.
+
+    A request is closed by a later report-done/report-blocked that either (a) sets
+    `reply_to` to the request's id (precise linkage), or (b) — when reply_to is absent —
+    comes from the request's recipient about the same task at/after the request time
+    (heuristic fallback). Each report closes at most one request; requests are walked in
+    order so concurrent same-task loops pair FIFO. Returns the still-open requests in
+    chronological order.
+    """
+    reqs = [d for d in dispatches
+            if d.get("type") == "dispatch.sent" and d.get("kind") == "request"]
+    reports = [d for d in dispatches
+               if d.get("type") == "dispatch.sent" and d.get("kind") in _REPORT_KINDS]
+    used: set = set()
+    opens: List[Dict[str, Any]] = []
+    for r in reqs:
+        rid = r.get("dispatch_id")
+        matched = False
+        for i, rep in enumerate(reports):  # precise: reply_to == request id
+            if i not in used and rep.get("reply_to") and rep.get("reply_to") == rid:
+                used.add(i); matched = True; break
+        if not matched:
+            for i, rep in enumerate(reports):  # fallback: same task, from recipient, later
+                if (i not in used and rep.get("from") == r.get("to")
+                        and rep.get("task") and rep.get("task") == r.get("task")
+                        and (rep.get("created_at") or "") >= (r.get("created_at") or "")):
+                    used.add(i); matched = True; break
+        if not matched:
+            opens.append(r)
+    return opens
+
+
+def _age_str(iso_ts: Optional[str]) -> str:
+    if not iso_ts:
+        return "?"
+    try:
+        t = datetime.strptime(iso_ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return "?"
+    secs = int((datetime.now(timezone.utc) - t).total_seconds())
+    if secs < 90:
+        return f"{secs}s"
+    if secs < 5400:
+        return f"{secs // 60}m"
+    return f"{secs // 3600}h"
+
+
+def pane_states_by_role(session: str) -> Dict[str, str]:
+    """role -> working/waiting/idle for live panes in the session (empty if none)."""
+    if not session:
+        return {}
+    try:
+        text = subprocess.run(
+            ["tmux", "list-panes", "-t", session, "-F",
+             "#{pane_id}\t#{@cockpit_role}\t#{@cockpit_runtime}"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return {}
+    states: Dict[str, str] = {}
+    for line in text.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2 or not parts[1].strip():
+            continue
+        pane_id, role = parts[0], parts[1].strip()
+        runtime = parts[2].strip() if len(parts) >= 3 else ""
+        states[role] = pane_state(_tmux_capture(pane_id), runtime or "claude")
+    return states
+
+
 def cmd_dispatch(args: argparse.Namespace, home: Path) -> int:
     if args.dispatch_cmd == "send":
         body = " ".join(args.body or []).strip()
@@ -284,6 +358,37 @@ def cmd_dispatch(args: argparse.Namespace, home: Path) -> int:
         tail = all_d[-args.n:] if args.n else all_d
         for m in tail:
             print(f"[{m.get('created_at')}] {_dispatch_one_liner(m)}")
+        return 0
+    if args.dispatch_cmd == "status":
+        dispatches = events(home, "dispatch")
+        opens = open_requests(dispatches)
+        pstates = pane_states_by_role(resolve_session())
+        rows = []
+        for r in opens:
+            to = r.get("to")
+            rows.append({
+                "dispatch_id": r.get("dispatch_id"),
+                "to": to,
+                "task": r.get("task"),
+                "subject": r.get("subject") or (r.get("body", "") or "")[:60],
+                "created_at": r.get("created_at"),
+                "age": _age_str(r.get("created_at")),
+                "pane_state": pstates.get(to, "absent"),
+            })
+        if args.json:
+            print_json({"open": rows})
+            return 0
+        if not rows:
+            print("no open loops — every request has a matching report.")
+            return 0
+        print(f"open loops: {len(rows)}  (requests with no matching report)")
+        for row in rows:
+            # idle/absent pane + open loop = likely silent finish or stall worth a nudge
+            hint = {"working": "working", "waiting": "waiting-on-prompt",
+                    "idle": "⚠ idle — likely silent finish, nudge",
+                    "absent": "⚠ no pane"}.get(row["pane_state"], row["pane_state"])
+            print(f"  {row['dispatch_id']} -> {row['to']:<14} task={row['task'] or '-':<8} "
+                  f"age={row['age']:<5} pane={row['pane_state']:<8} {hint}")
         return 0
     return 2
 
@@ -549,6 +654,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     dl = dsub.add_parser("log", help="human-readable dispatch feed")
     dl.add_argument("n", nargs="?", type=int, default=40)
+
+    dst = dsub.add_parser("status", help="open loops: requests with no matching report")
+    dst.add_argument("--json", action="store_true")
 
     health = sub.add_parser("health", help="per-role liveness / busy / subagent snapshot")
     health.add_argument("--json", action="store_true")

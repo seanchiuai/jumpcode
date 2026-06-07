@@ -45,12 +45,18 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
 ## 4. Monitoring & recovery
 
 You own **watching your leads** — a dispatch confirms delivery (`woke`), not completion.
-After you dispatch work, check back rather than assuming it finished. Your two tools:
+After you dispatch work, check back rather than assuming it finished. Your tools:
 
 ```bash
+./.agent-cockpit/bin/status                # OPEN LOOPS: requests with no report yet (+ pane state)
 ./.agent-cockpit/bin/peek <role> [lines]   # read a lead's pane (read-only; never wakes)
 ./.agent-cockpit/bin/dispatch log 40       # what you asked vs. what came back
 ```
+
+Start with `status`: it lists every request you sent that has no matching report and tags
+each recipient's live pane. An open loop whose pane is **idle** is the classic silent
+finish — `peek` it to confirm, then nudge or integrate. (Pairing is precise when reports
+carry `--reply-to`; otherwise it falls back to matching by task.)
 
 - **Reading a `peek`:** an advancing spinner/timer = **working** (wait); a static empty
   `❯` prompt = **idle / finished-its-turn** (likely a silent finish — ask it to report);
