@@ -83,5 +83,36 @@ class ActiveSubagentsTests(unittest.TestCase):
         self.assertEqual(cockpit.active_subagents(d), {})
 
 
+class LastSeenTests(unittest.TestCase):
+    def _d(self, frm, to, ts):
+        return {"type": "dispatch.sent", "from": frm, "to": to, "created_at": ts}
+
+    def test_woken_but_silent_lead_has_addressed_not_spoke(self):
+        # orchestrator dispatches backend-lead twice; backend never replies.
+        # A single merged last_seen would make backend look freshly active; the
+        # split must show it was *addressed* recently but never *spoke*.
+        d = [
+            self._d("orchestrator", "backend-lead", "2026-06-07T01:00:00Z"),
+            self._d("orchestrator", "backend-lead", "2026-06-07T02:00:00Z"),
+        ]
+        seen = cockpit.last_seen_by_role(d)
+        self.assertEqual(seen["backend-lead"]["addressed"], "2026-06-07T02:00:00Z")
+        self.assertIsNone(seen["backend-lead"]["spoke"])
+        self.assertEqual(seen["orchestrator"]["spoke"], "2026-06-07T02:00:00Z")
+
+    def test_reply_updates_spoke_independently(self):
+        d = [
+            self._d("orchestrator", "backend-lead", "2026-06-07T01:00:00Z"),
+            self._d("backend-lead", "orchestrator", "2026-06-07T03:00:00Z"),
+        ]
+        seen = cockpit.last_seen_by_role(d)
+        self.assertEqual(seen["backend-lead"]["spoke"], "2026-06-07T03:00:00Z")
+        self.assertEqual(seen["backend-lead"]["addressed"], "2026-06-07T01:00:00Z")
+
+    def test_non_dispatch_events_ignored(self):
+        d = [{"type": "other", "from": "x", "to": "y", "created_at": "2026-06-07T01:00:00Z"}]
+        self.assertEqual(cockpit.last_seen_by_role(d), {})
+
+
 if __name__ == "__main__":
     unittest.main()

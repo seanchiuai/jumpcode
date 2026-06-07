@@ -353,6 +353,27 @@ def active_subagents(dispatches: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     return {role: names for role, names in active.items() if names}
 
 
+def last_seen_by_role(dispatches: List[Dict[str, Any]]) -> Dict[str, Dict[str, Optional[str]]]:
+    """Per-role last activity, split by DIRECTION.
+
+    'spoke' = the role last appeared as a dispatch's `from` (it acted / replied);
+    'addressed' = it last appeared as `to` (it was woken). A lead woken but silent has
+    a fresh `addressed` and a stale/None `spoke` — the "asked, still no answer" signal a
+    single merged last_seen hides. Dispatches are chronological, so the last write wins.
+    """
+    out: Dict[str, Dict[str, Optional[str]]] = {}
+    for d in dispatches:
+        if d.get("type") != "dispatch.sent":
+            continue
+        ts = d.get("created_at")
+        frm, to = d.get("from"), d.get("to")
+        if frm:
+            out.setdefault(frm, {"spoke": None, "addressed": None})["spoke"] = ts
+        if to:
+            out.setdefault(to, {"spoke": None, "addressed": None})["addressed"] = ts
+    return out
+
+
 def _tmux_capture(pane_id: str) -> str:
     try:
         return subprocess.run(
@@ -413,14 +434,20 @@ def cmd_health(args: argparse.Namespace, home: Path) -> int:
     dispatches = events(home, "dispatch")
     subs = active_subagents(dispatches)
 
-    last_seen: Dict[str, str] = {}
-    for d in dispatches:
-        if d.get("type") != "dispatch.sent":
-            continue
-        ts = d.get("created_at")
-        for role in (d.get("from"), d.get("to")):
-            if role:
-                last_seen[role] = ts
+    seen = last_seen_by_role(dispatches)
+
+    def _seen_fields(role: str) -> Dict[str, Any]:
+        s = seen.get(role, {})
+        spoke, addressed = s.get("spoke"), s.get("addressed")
+        # "silent" = woken more recently than it last spoke (or never spoke): asked,
+        # no answer yet. ISO-8601 'Z' timestamps compare correctly as strings.
+        silent = addressed is not None and (spoke is None or addressed > spoke)
+        return {
+            "last_spoke": spoke,
+            "last_addressed": addressed,
+            "last_seen": max([t for t in (spoke, addressed) if t], default=None),
+            "silent": silent,
+        }
 
     panes_text = ""
     if session:
@@ -450,17 +477,17 @@ def cmd_health(args: argparse.Namespace, home: Path) -> int:
             "role": role, "pane": pane_id, "alive": alive, "command": cmd,
             "runtime": runtime or "claude",
             "state": state, "subagents": subs.get(role, []),
-            "last_seen": last_seen.get(role),
+            **_seen_fields(role),
         })
 
     # Roles that have appeared in the dispatch log but have no live pane right now.
-    for role in sorted(r for r in last_seen if r not in seen_roles
+    for role in sorted(r for r in seen if r not in seen_roles
                        and r not in ("hermes", "human")):
         agents.append({
             "role": role, "pane": None, "alive": False, "command": None,
             "runtime": None,
             "state": "absent", "subagents": subs.get(role, []),
-            "last_seen": last_seen.get(role),
+            **_seen_fields(role),
         })
 
     clients = 0
@@ -485,8 +512,10 @@ def cmd_health(args: argparse.Namespace, home: Path) -> int:
     for a in agents:
         dot = "●" if a["alive"] else "○"
         sub = ("  subagents=" + ", ".join(a["subagents"])) if a["subagents"] else ""
+        silent = "  ⚠ woken,no-reply" if a.get("silent") else ""
         print(f"  {dot} {a['role']:<16} {(a.get('runtime') or '-'):<7} {a['state']:<8} "
-              f"last_seen={a['last_seen'] or '-'}{sub}")
+              f"spoke={a.get('last_spoke') or '-'} addressed={a.get('last_addressed') or '-'}"
+              f"{silent}{sub}")
     return 0
 
 
