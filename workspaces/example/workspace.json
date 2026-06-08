@@ -1,0 +1,5 @@
+{
+  "_comment": "Example workspace (settings-only). workspace_root resolves relative to the cockpit's parent dir — point it at your project repo. Roles come from the central roles/ base set, overlaid by <workspace_root>/.agent-cockpit/roles/ if present. role_runtimes overrides a role's runtime, e.g. {\"backend-lead\": \"codex\"}.",
+  "workspace_root": "workspaces/example",
+  "role_runtimes": {}
+}

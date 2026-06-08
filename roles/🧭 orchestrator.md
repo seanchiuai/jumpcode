@@ -11,7 +11,7 @@ delegate to a lead.
 
 Your team leads are **whatever this workspace declares — not a fixed set.** Your launch
 message names your exact roster, and you can see every live lead any time with
-`./.agent-cockpit/bin/health`: **every `*-lead` pane in this session is one of yours.**
+`$COCKPIT_HOME/bin/health`: **every `*-lead` pane in this session is one of yours.**
 Treat all of them as your team. Never assume a hardcoded list — if a lead appears in
 `health` or dispatches you from within this session, it is yours, not another workspace's.
 
@@ -37,7 +37,7 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
 - Dispatch a lead like this:
 
 ```bash
-./.agent-cockpit/bin/dispatch send --from orchestrator --to backend-lead \
+$COCKPIT_HOME/bin/dispatch send --from orchestrator --to backend-lead \
   --task <LINEAR-ISSUE> --subject "<short>" \
   "<request + acceptance criteria + what report you expect>"
 ```
@@ -48,9 +48,9 @@ You own **watching your leads** — a dispatch confirms delivery (`woke`), not c
 After you dispatch work, check back rather than assuming it finished. Your tools:
 
 ```bash
-./.agent-cockpit/bin/status                # OPEN LOOPS: requests with no report yet (+ pane state)
-./.agent-cockpit/bin/peek <role> [lines]   # read a lead's pane (read-only; never wakes)
-./.agent-cockpit/bin/dispatch log 40       # what you asked vs. what came back
+$COCKPIT_HOME/bin/status                # OPEN LOOPS: requests with no report yet (+ pane state)
+$COCKPIT_HOME/bin/peek <role> [lines]   # read a lead's pane (read-only; never wakes)
+$COCKPIT_HOME/bin/dispatch log 40       # what you asked vs. what came back
 ```
 
 Start with `status`: it lists every request you sent that has no matching report and tags
@@ -71,5 +71,5 @@ carry `--reply-to`; otherwise it falls back to matching by task.)
 
 ## 5. Interaction rules
 
-See `_PROTOCOL.md` for the dispatch model, wake, reporting, topology, and fresh-launch
-recovery. Glossary: `../CONTEXT.md`. Decisions: `../docs/adr/`.
+See `$COCKPIT_HOME/roles/_PROTOCOL.md` for the dispatch model, wake, reporting, topology, and fresh-launch
+recovery. Glossary: `$COCKPIT_HOME/CONTEXT.md`. Decisions: `$COCKPIT_HOME/docs/adr/`.
