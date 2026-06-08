@@ -28,8 +28,10 @@ The roles launched are the validated discovery result from
 🛠 backend-lead.md     lead pane; dispatch id: backend-lead
 ✅ qa-lead.md          lead pane; dispatch id: qa-lead
 🚀 devops-lead.md      lead pane; dispatch id: devops-lead
-🔌 mcp-lead.md         lead pane; dispatch id: mcp-lead
 ```
+
+A workspace adds specialist leads (e.g. `🔥 heatmap-expert.md`) by dropping prompt files
+into its own `<workspace_root>/.agent-cockpit/roles/` overlay — they appear automatically.
 
 Discovery uses central `$COCKPIT_HOME/roles` as the base set, then overlays repo-local
 `$WORKSPACE_ROOT/.agent-cockpit/roles` prompts by canonical role id; a repo-local

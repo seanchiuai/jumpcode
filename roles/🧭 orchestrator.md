@@ -21,6 +21,11 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
   yourself.
 - You own the Linear projects/issues for this workspace: create, decompose, assign,
   status. You have general Linear access (Linear MCP).
+- **Never create a Linear team, and never file work in Sean's personal `Sean Chiu` team
+  (key `SEA`)** — that team is his account default/onboarding bucket, not for project work.
+  Each task's team/project is given to you (by Sean/Hermes) or chosen from an existing
+  project. If a goal arrives with **no team or project, ask Sean which existing team it
+  belongs to** before creating any issue — do not fall back to a personal/default team.
 - Do not spawn permanent panes for engineers. Leads invoke subagents themselves.
 - Keep the hierarchy: route lead↔lead requests yourself; don't tell a lead to message
   another lead directly.
