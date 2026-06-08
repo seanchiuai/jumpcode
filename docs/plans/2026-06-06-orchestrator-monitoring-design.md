@@ -5,7 +5,7 @@
 
 ## Problem
 
-The cockpit can confirm a dispatch's keystrokes were *delivered* (`woke: true`), but it
+The jumpcode can confirm a dispatch's keystrokes were *delivered* (`woke: true`), but it
 cannot tell whether a lead is **still working**, **finished but forgot to report**, or
 **errored/crashed**. From the outside, all three present as a quiet pane. So an
 unanswered request is indistinguishable from a completed one, and a "sitting agent that
@@ -27,11 +27,11 @@ This is a deliberate lean trade — see "What we give up".
 A new read-only command + wrapper:
 
 ```
-./.agent-cockpit/bin/peek <role> [lines]
+./.jumpcode/bin/peek <role> [lines]
 ```
 
-- Resolves the role's pane via the existing `resolve_pane` (`@cockpit_role`) and
-  `resolve_session` (`$TMUX` / `COCKPIT_TMUX_SESSION`).
+- Resolves the role's pane via the existing `resolve_pane` (`@jumpcode_role`) and
+  `resolve_session` (`$TMUX` / `JUMPCODE_TMUX_SESSION`).
 - Prints `tmux capture-pane -p -S -<lines>` for that pane (default ~50 lines of
   scrollback) so the caller can read what the lead is doing: mid-work (spinner), idle at
   an empty prompt, an API/error banner, or a dead shell.
@@ -51,9 +51,9 @@ Add to `roles/🧭 orchestrator.md` (and a short pointer in `roles/_PROTOCOL.md`
 - **Conservative recovery:** for a transient error or a lead idle-without-reporting,
   **re-wake it to retry** — `dispatch send --from orchestrator --to <role> --task <T>
   "status? continue/retry SEA-…"`. If it still fails after ~2 nudges, or the error is
-  non-transient (auth/quota exhausted, crashed pane, a bug in the cockpit CLI itself),
+  non-transient (auth/quota exhausted, crashed pane, a bug in the jumpcode CLI itself),
   **escalate to Sean** with the diagnosis you read from the pane. Do **not** auto-answer
-  permission dialogs, respawn panes, or edit the cockpit tooling (that's Hermes's job).
+  permission dialogs, respawn panes, or edit the jumpcode tooling (that's Hermes's job).
 
 ## What we give up (accepted)
 
@@ -86,7 +86,7 @@ lead ──dispatch report-done/blocked(wake)──▶ orchestrator   (loop clos
 
 | Component | Where | Notes |
 |---|---|---|
-| `peek <role> [lines]` | `bin/cockpit` (`cmd_peek`) + `bin/peek` wrapper | reuses `resolve_pane`/`resolve_session`; read-only |
+| `peek <role> [lines]` | `bin/jumpcode` (`cmd_peek`) + `bin/peek` wrapper | reuses `resolve_pane`/`resolve_session`; read-only |
 | Monitoring & recovery | `roles/🧭 orchestrator.md` + `roles/_PROTOCOL.md` pointer | conservative posture |
 
 ## Error handling
@@ -101,7 +101,7 @@ lead ──dispatch report-done/blocked(wake)──▶ orchestrator   (loop clos
 - Reuses already-tested `resolve_pane`. The new `cmd_peek` arg/branch handling (unknown
   role, no session) is unit-testable by stubbing the session/capture; the `tmux
   capture-pane` IO itself is verified once manually against a live pane.
-- Live check: with the workspace up, `./.agent-cockpit/bin/peek backend-lead` prints
+- Live check: with the workspace up, `./.jumpcode/bin/peek backend-lead` prints
   that pane's content.
 
 ## Out of scope (future, if lean proves insufficient)

@@ -1,4 +1,4 @@
-# Agent Cockpit Handoff
+# Jumpcode Handoff
 
 ## What this is
 
@@ -14,27 +14,27 @@ dispatch   one directed message that is BOTH delivered live (wake into the
            recipient's pane) AND appended to the durable dispatch log
 ```
 
-The only state file is append-only JSONL under `.agent-cockpit/state/`:
+The only state file is append-only JSONL under `.jumpcode/state/`:
 
 ```text
-.agent-cockpit/state/dispatches.jsonl
+.jumpcode/state/dispatches.jsonl
 ```
 
 (plus internal `state/counters.json` and `state/.lock`). Human-readable feed:
-`.agent-cockpit/shared/conversation.log`.
+`.jumpcode/shared/conversation.log`.
 
 ## Current command surface
 
 ```bash
-./.agent-cockpit/bin/dispatch send --from R --to R [--project P] [--task T] \
+./.jumpcode/bin/dispatch send --from R --to R [--project P] [--task T] \
     [--subject S] [--kind request|reply|report-done|report-blocked|notice] [--no-wake] BODY
-./.agent-cockpit/bin/dispatch inbox R [--json]
-./.agent-cockpit/bin/dispatch show DID [--json]
-./.agent-cockpit/bin/dispatch log [N]
-./.agent-cockpit/bin/status        # open loops: requests with no matching report (+ pane state)
-./.agent-cockpit/bin/convo [lines]
-./.agent-cockpit/bin/start-webapp
-./.agent-cockpit/bin/cockpit roles discover --workspace webapp [--json]
+./.jumpcode/bin/dispatch inbox R [--json]
+./.jumpcode/bin/dispatch show DID [--json]
+./.jumpcode/bin/dispatch log [N]
+./.jumpcode/bin/status        # open loops: requests with no matching report (+ pane state)
+./.jumpcode/bin/convo [lines]
+./.jumpcode/bin/start-webapp
+./.jumpcode/bin/jumpcode roles discover --workspace webapp [--json]
 ```
 
 ## First workspace
@@ -42,20 +42,20 @@ The only state file is append-only JSONL under `.agent-cockpit/state/`:
 The first configured workspace is `webapp`:
 
 ```text
-.agent-cockpit/workspaces/webapp/WORKSPACE.md
-.agent-cockpit/workspaces/webapp/LAUNCH_PROMPTS.md
+.jumpcode/workspaces/webapp/WORKSPACE.md
+.jumpcode/workspaces/webapp/LAUNCH_PROMPTS.md
 ```
 
-Roles are thin **charters** plus one shared protocol. `start-webapp` consumes the centralized discovery JSON: central `$COCKPIT_HOME/roles` is the base set, repo-local `$WORKSPACE_ROOT/.agent-cockpit/roles` overlays prompts by canonical role id, and a repo-local `_PROTOCOL.md` overrides central only when present. Adding/removing a `*.md` charter adds/removes a lead; `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and contains no roster maps.
+Roles are thin **charters** plus one shared protocol. `start-webapp` consumes the centralized discovery JSON: central `$JUMPCODE_HOME/roles` is the base set, repo-local `$WORKSPACE_ROOT/.jumpcode/roles` overlays prompts by canonical role id, and a repo-local `_PROTOCOL.md` overrides central only when present. Adding/removing a `*.md` charter adds/removes a lead; `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and contains no roster maps.
 
 ```text
-.agent-cockpit/roles/_PROTOCOL.md
-.agent-cockpit/roles/🧭 orchestrator.md
-.agent-cockpit/roles/🎨 frontend-lead.md
-.agent-cockpit/roles/🛠 backend-lead.md
-.agent-cockpit/roles/✅ qa-lead.md
-.agent-cockpit/roles/🚀 devops-lead.md
-.agent-cockpit/roles/🔌 mcp-lead.md
+.jumpcode/roles/_PROTOCOL.md
+.jumpcode/roles/🧭 orchestrator.md
+.jumpcode/roles/🎨 frontend-lead.md
+.jumpcode/roles/🛠 backend-lead.md
+.jumpcode/roles/✅ qa-lead.md
+.jumpcode/roles/🚀 devops-lead.md
+.jumpcode/roles/🔌 mcp-lead.md
 ```
 
 `start-webapp` builds one tmux session with two windows:
@@ -67,7 +67,7 @@ macbook-webapp:roles    Claude Code/Codex panes (launched fresh, no -p on leads)
 macbook-webapp:monitor  feed/status logs when needed
 ```
 
-Each pane carries a machine-readable `@cockpit_role` option (e.g. `orchestrator`,
+Each pane carries a machine-readable `@jumpcode_role` option (e.g. `orchestrator`,
 `backend-lead`) which is how `dispatch send` targets the right pane for a wake — Claude
 overwrites the visible pane title, so wake targeting never relies on it.
 
@@ -85,6 +85,6 @@ overwrites the visible pane title, so wake targeting never relies on it.
 
 ```bash
 python3 -m unittest discover -s tests
-python3 -m py_compile .agent-cockpit/bin/cockpit
-bash -n .agent-cockpit/bin/dispatch .agent-cockpit/bin/convo .agent-cockpit/bin/status .agent-cockpit/bin/start-webapp
+python3 -m py_compile .jumpcode/bin/jumpcode
+bash -n .jumpcode/bin/dispatch .jumpcode/bin/convo .jumpcode/bin/status .jumpcode/bin/start-webapp
 ```

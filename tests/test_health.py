@@ -3,26 +3,26 @@ import unittest
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
-_COCKPIT = Path(__file__).resolve().parents[1] / "bin" / "cockpit"
+_JUMPCODE = Path(__file__).resolve().parents[1] / "bin" / "jumpcode"
 spec = importlib.util.spec_from_file_location(
-    "cockpit", _COCKPIT, loader=SourceFileLoader("cockpit", str(_COCKPIT))
+    "jumpcode", _JUMPCODE, loader=SourceFileLoader("jumpcode", str(_JUMPCODE))
 )
-cockpit = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(cockpit)
+jumpcode = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(jumpcode)
 
 
 class PaneStateTests(unittest.TestCase):
     def test_working_when_interrupt_hint_present(self):
         screen = "✳ Crunching… (26s · ↑ 958 tokens · esc to interrupt)\n❯ \n"
-        self.assertEqual(cockpit.pane_state(screen), "working")
+        self.assertEqual(jumpcode.pane_state(screen), "working")
 
     def test_waiting_on_a_confirm_prompt(self):
         screen = "Do you want to proceed?\n❯ 1. Yes\n  2. No\n"
-        self.assertEqual(cockpit.pane_state(screen), "waiting")
+        self.assertEqual(jumpcode.pane_state(screen), "waiting")
 
     def test_idle_otherwise(self):
         screen = "❯ \n⏵⏵ auto mode on (shift+tab to cycle)        40262 tokens\n"
-        self.assertEqual(cockpit.pane_state(screen), "idle")
+        self.assertEqual(jumpcode.pane_state(screen), "idle")
 
     def test_idle_auto_mode_footer_with_rotating_esc_hint_is_idle(self):
         # LIVE-CONFIRMED 2026-06-07 (Claude Code 2.1.168): the auto-mode footer rotates
@@ -35,7 +35,7 @@ class PaneStateTests(unittest.TestCase):
             "──────────────────────────────\n"
             "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt          45765 tokens\n"
         )
-        self.assertEqual(cockpit.pane_state(screen), "idle")
+        self.assertEqual(jumpcode.pane_state(screen), "idle")
 
     def test_working_spinner_wins_even_with_auto_mode_footer(self):
         # When truly working, the spinner line carries 'esc to interrupt' and must win
@@ -45,33 +45,33 @@ class PaneStateTests(unittest.TestCase):
             "❯ \n"
             "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt          43470 tokens\n"
         )
-        self.assertEqual(cockpit.pane_state(screen), "working")
+        self.assertEqual(jumpcode.pane_state(screen), "working")
 
     def test_claude_default_runtime_unchanged(self):
         # existing three tests cover claude implicitly; this pins the explicit arg
         screen = "✳ Crunching… (26s · esc to interrupt)\n❯ \n"
-        self.assertEqual(cockpit.pane_state(screen, "claude"), "working")
+        self.assertEqual(jumpcode.pane_state(screen, "claude"), "working")
 
     def test_codex_trust_prompt_is_waiting(self):
         # captured live from codex 0.137.0-alpha.4 on 2026-06-07
         screen = ("  Do you trust the contents of this directory?\n"
                   "› 1. Yes, continue\n  2. No, quit\n  Press enter to continue\n")
-        self.assertEqual(cockpit.pane_state(screen, "codex"), "waiting")
+        self.assertEqual(jumpcode.pane_state(screen, "codex"), "waiting")
 
     def test_codex_idle_composer(self):
         # captured live: empty composer shows the greyed placeholder
         screen = ("╭─────╮\n│ >_ OpenAI Codex (v0.137.0-alpha.4) │\n╰─────╯\n"
                   "› Explain this codebase\n  gpt-5.5 high · /tmp/x\n")
-        self.assertEqual(cockpit.pane_state(screen, "codex"), "idle")
+        self.assertEqual(jumpcode.pane_state(screen, "codex"), "idle")
 
     def test_codex_busy_marker(self):
         # confirmed live on codex 0.137.0-alpha.4 (2026-06-07): "• Working (Ns • esc to interrupt)"
         screen = "• Working (1m 4s • esc to interrupt)\n› \n"
-        self.assertEqual(cockpit.pane_state(screen, "codex"), "working")
+        self.assertEqual(jumpcode.pane_state(screen, "codex"), "working")
 
     def test_unknown_runtime_falls_back_to_claude(self):
         screen = "Do you want to proceed?\n❯ 1. Yes\n  2. No\n"
-        self.assertEqual(cockpit.pane_state(screen, "gemini"), "waiting")
+        self.assertEqual(jumpcode.pane_state(screen, "gemini"), "waiting")
 
 
 class ActiveSubagentsTests(unittest.TestCase):
@@ -83,7 +83,7 @@ class ActiveSubagentsTests(unittest.TestCase):
             self._notice("backend-lead", "subagent:start code-reviewer"),
             self._notice("backend-lead", "subagent:end code-reviewer"),
         ]
-        self.assertEqual(cockpit.active_subagents(d), {})
+        self.assertEqual(jumpcode.active_subagents(d), {})
 
     def test_open_subagent_is_reported_per_role(self):
         d = [
@@ -92,7 +92,7 @@ class ActiveSubagentsTests(unittest.TestCase):
             self._notice("backend-lead", "subagent:start migration-writer"),
         ]
         self.assertEqual(
-            cockpit.active_subagents(d),
+            jumpcode.active_subagents(d),
             {"backend-lead": ["code-reviewer", "migration-writer"],
              "frontend-lead": ["a11y-auditor"]},
         )
@@ -103,7 +103,7 @@ class ActiveSubagentsTests(unittest.TestCase):
             {"type": "dispatch.sent", "kind": "request", "from": "orchestrator",
              "subject": "subagent:start nope"},  # wrong kind, ignored
         ]
-        self.assertEqual(cockpit.active_subagents(d), {})
+        self.assertEqual(jumpcode.active_subagents(d), {})
 
 
 class LastSeenTests(unittest.TestCase):
@@ -118,7 +118,7 @@ class LastSeenTests(unittest.TestCase):
             self._d("orchestrator", "backend-lead", "2026-06-07T01:00:00Z"),
             self._d("orchestrator", "backend-lead", "2026-06-07T02:00:00Z"),
         ]
-        seen = cockpit.last_seen_by_role(d)
+        seen = jumpcode.last_seen_by_role(d)
         self.assertEqual(seen["backend-lead"]["addressed"], "2026-06-07T02:00:00Z")
         self.assertIsNone(seen["backend-lead"]["spoke"])
         self.assertEqual(seen["orchestrator"]["spoke"], "2026-06-07T02:00:00Z")
@@ -128,13 +128,13 @@ class LastSeenTests(unittest.TestCase):
             self._d("orchestrator", "backend-lead", "2026-06-07T01:00:00Z"),
             self._d("backend-lead", "orchestrator", "2026-06-07T03:00:00Z"),
         ]
-        seen = cockpit.last_seen_by_role(d)
+        seen = jumpcode.last_seen_by_role(d)
         self.assertEqual(seen["backend-lead"]["spoke"], "2026-06-07T03:00:00Z")
         self.assertEqual(seen["backend-lead"]["addressed"], "2026-06-07T01:00:00Z")
 
     def test_non_dispatch_events_ignored(self):
         d = [{"type": "other", "from": "x", "to": "y", "created_at": "2026-06-07T01:00:00Z"}]
-        self.assertEqual(cockpit.last_seen_by_role(d), {})
+        self.assertEqual(jumpcode.last_seen_by_role(d), {})
 
 
 if __name__ == "__main__":

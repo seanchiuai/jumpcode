@@ -1,10 +1,10 @@
 state/
 shared/
 # Real workspaces are never committed — only the example template ships in this repo.
-# A real workspace lives in its own project repo (with its own .agent-cockpit/roles/).
+# A real workspace lives in its own project repo (with its own .jumpcode/roles/).
 workspaces/*
 !workspaces/example/
 __pycache__/
 *.pyc
 *.bak
-.agent-cockpit.bak.*
+.jumpcode.bak.*

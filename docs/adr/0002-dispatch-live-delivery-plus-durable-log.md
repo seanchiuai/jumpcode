@@ -16,7 +16,7 @@ Only the orchestrator's two boundaries:
 - **Hermes/Human ↔ Orchestrator**
 - **Orchestrator ↔ Team Leads** (including reports)
 
-Explicitly **not** logged in the cockpit: the **Human ↔ Hermes** conversation — it already lives durably in the Hermes session DB (`~/.hermes/state.db`); duplicating it would only add noise.
+Explicitly **not** logged in the jumpcode: the **Human ↔ Hermes** conversation — it already lives durably in the Hermes session DB (`~/.hermes/state.db`); duplicating it would only add noise.
 
 Deferred: capturing the actual *substance/output* of an agent's work (self-report vs pane-scrape). For now agents self-author summaries via reports; richer output capture is a later decision.
 

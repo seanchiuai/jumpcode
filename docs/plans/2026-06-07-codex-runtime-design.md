@@ -5,9 +5,9 @@
 
 ## Problem
 
-Every cockpit pane runs Claude Code. The launcher hardcodes one binary
+Every jumpcode pane runs Claude Code. The launcher hardcodes one binary
 (`start-webapp:6` `CLAUDE_BIN`, `:41` `exec "$CLAUDE_BIN"`) for all panes, and health
-detection keys off Claude's literal status strings (`cockpit:287-288`). Sean wants
+detection keys off Claude's literal status strings (`jumpcode:287-288`). Sean wants
 **mixed teams** — a lead can run **Codex** while others run Claude, chosen per role for
 whatever each is best at. Runtime should be a per-role knob, not a rebuild.
 
@@ -25,7 +25,7 @@ each piece of this design:
 
 What is genuinely *ours* and absent from all of them: the coordination layer —
 **Linear-as-system-of-record, the dispatch log, Hermes, hub-and-spoke charters, and
-`@cockpit_role` wake targeting**. That is why we **extend our launcher rather than adopt
+`@jumpcode_role` wake targeting**. That is why we **extend our launcher rather than adopt
 one of these tools**: they are worktree-per-task TUIs with their own UX; bolting our
 Linear/dispatch/Hermes model onto Claude Squad is more friction than ~30 lines in
 `start-webapp`.
@@ -36,7 +36,7 @@ Add a **thin, per-role runtime knob** plus a small **structured runtime descript
 inline in the launcher. Borrow proven *patterns* (profiles, runtime-keyed three-state
 detection). Do **not** introduce a new config-file abstraction, an indirection layer, or
 event-hook plumbing in v1. Everything already runtime-agnostic (dispatch log, wake,
-`@cockpit_role`, hub-and-spoke) is untouched.
+`@jumpcode_role`, hub-and-spoke) is untouched.
 
 ## Empirically settled (live spike, 2026-06-07)
 
@@ -82,14 +82,14 @@ a third runtime arrives).
 
 `agent_cmd` gains a runtime arg to pick the program. Seeding uses the **same** two-step
 send-keys injection for both runtimes (reuses the verify-hardened path; `codex [PROMPT]`
-is not needed). Each pane is tagged with **`@cockpit_runtime`** at launch, mirroring the
-existing `@cockpit_role` option.
+is not needed). Each pane is tagged with **`@jumpcode_runtime`** at launch, mirroring the
+existing `@jumpcode_role` option.
 
-### 3. Runtime-keyed `pane_state()` in `bin/cockpit`
+### 3. Runtime-keyed `pane_state()` in `bin/jumpcode`
 
 `pane_state(capture_text, runtime="claude")` selects the marker set for that runtime.
-`cmd_health` reads each pane's `@cockpit_runtime` (added to the `list-panes -F` format
-string alongside `@cockpit_role`) and passes it in. Three states unchanged:
+`cmd_health` reads each pane's `@jumpcode_runtime` (added to the `list-panes -F` format
+string alongside `@jumpcode_role`) and passes it in. Three states unchanged:
 `working` | `waiting` | `idle` (ccmanager's model). Markers become a per-runtime table
 rather than two module globals.
 
@@ -107,12 +107,12 @@ workspace.json  role_runtimes: { backend-lead: codex }
         │
 start-webapp ──per role──▶ RUNTIME[name] = {program, busy_markers, waiting_markers}
         ├─ launch pane with that program  (exec claude | exec codex)
-        ├─ set @cockpit_role     (wake target — unchanged)
-        └─ set @cockpit_runtime  (state-detection selector — NEW)
+        ├─ set @jumpcode_role     (wake target — unchanged)
+        └─ set @jumpcode_runtime  (state-detection selector — NEW)
         │
 dispatch send ──wake_pane (C-u → type → capture-verify → Enter)──▶ pane   (runtime-agnostic)
         │
-health ──list-panes @cockpit_role + @cockpit_runtime──▶ pane_state(capture, runtime)
+health ──list-panes @jumpcode_role + @jumpcode_runtime──▶ pane_state(capture, runtime)
         └─ working | waiting | idle   (per-runtime markers)
 ```
 
@@ -121,8 +121,8 @@ health ──list-panes @cockpit_role + @cockpit_runtime──▶ pane_state(cap
 | Component | Where | Notes |
 |---|---|---|
 | `role_runtimes` map | `workspaces/webapp/workspace.json` | optional; default `claude` |
-| runtime descriptor + `@cockpit_runtime` | `bin/start-webapp` | inline, data-shaped; default `CODEX_BIN` = app binary |
-| runtime-keyed `pane_state` | `bin/cockpit` (`cmd_health`) | reads `@cockpit_runtime`; per-runtime marker table |
+| runtime descriptor + `@jumpcode_runtime` | `bin/start-webapp` | inline, data-shaped; default `CODEX_BIN` = app binary |
+| runtime-keyed `pane_state` | `bin/jumpcode` (`cmd_health`) | reads `@jumpcode_runtime`; per-runtime marker table |
 | subagent/Linear notes | `roles/_PROTOCOL.md` | advisory |
 
 ## Error handling
@@ -132,7 +132,7 @@ health ──list-panes @cockpit_role + @cockpit_runtime──▶ pane_state(cap
 - Missing `$CODEX_BIN` → the existing `command -v` preflight check is extended to validate
   every runtime actually referenced by the workspace, with a clear message, before any
   pane is created.
-- `pane_state` with an unknown/absent `@cockpit_runtime` → default to the `claude` marker
+- `pane_state` with an unknown/absent `@jumpcode_runtime` → default to the `claude` marker
   set (safe; the working/waiting markers largely overlap).
 
 ## Testing
@@ -142,7 +142,7 @@ health ──list-panes @cockpit_role + @cockpit_runtime──▶ pane_state(cap
   **idle** composer capture (confirmed); a **busy** capture added once observed live. Plus
   the existing Claude captures, asserting the runtime arg selects the right set.
 - **Launcher (headless, `CLAUDE_BIN=cat`/`CODEX_BIN=cat` throwaway session)**: assert each
-  pane gets the correct `@cockpit_runtime` for a mixed `role_runtimes`, and that an unknown
+  pane gets the correct `@jumpcode_runtime` for a mixed `role_runtimes`, and that an unknown
   runtime falls back to `claude`. (Same throwaway-session style as the geometry test.)
 - **Live (one mixed launch)**: a webapp launch with one Codex lead; drive a `dispatch
   send` to it and read the `woke` flag; run `health` and **confirm the Codex busy marker**

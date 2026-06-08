@@ -27,5 +27,5 @@ verdict against it.
 
 ## 4. Interaction rules
 
-See `$COCKPIT_HOME/roles/_PROTOCOL.md` for the dispatch model, wake, how to report `report-done`/
-`report-blocked`, topology, and fresh-launch recovery. Glossary: `$COCKPIT_HOME/CONTEXT.md`.
+See `$JUMPCODE_HOME/roles/_PROTOCOL.md` for the dispatch model, wake, how to report `report-done`/
+`report-blocked`, topology, and fresh-launch recovery. Glossary: `$JUMPCODE_HOME/CONTEXT.md`.

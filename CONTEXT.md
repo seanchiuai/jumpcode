@@ -1,15 +1,15 @@
-# Agent Cockpit
+# Jumpcode
 
-The local, file-based multi-agent orchestration system for `workspace-macbook`. Human + Hermes drive a workspace's orchestrator, which commands its team leads, which invoke general subagents as tools. Projects and tasks live in Linear; the cockpit owns the visible panes, dispatch delivery, the dispatch log, and workspace config.
+The local, file-based multi-agent orchestration system for `workspace-macbook`. Human + Hermes drive a workspace's orchestrator, which commands its team leads, which invoke general subagents as tools. Projects and tasks live in Linear; the jumpcode owns the visible panes, dispatch delivery, the dispatch log, and workspace config.
 
 ## Language
 
 **Project**:
-A collection of tasks sharing one goal (e.g. "set up MCP"), tracked as a **Linear project**. A workspace can have several active at once; its orchestrator interleaves them. The cockpit does **not** maintain its own project registry — Linear is the system of record (see ADR 0003).
+A collection of tasks sharing one goal (e.g. "set up MCP"), tracked as a **Linear project**. A workspace can have several active at once; its orchestrator interleaves them. The jumpcode does **not** maintain its own project registry — Linear is the system of record (see ADR 0003).
 _Avoid_: run, registry
 
 **Task**:
-A unit of work — a **Linear issue**. Lives in Linear, not the cockpit. The orchestrator (and Hermes) read/write it via Linear.
+A unit of work — a **Linear issue**. Lives in Linear, not the jumpcode. The orchestrator (and Hermes) read/write it via Linear.
 _Avoid_: ticket
 
 **Workspace**:
@@ -33,7 +33,7 @@ A **general, repo-agnostic** Claude Code subagent (e.g. code reviewer) that a te
 _Avoid_: specialist
 
 **Hermes**:
-The external meta-orchestrator — the local Mac operator agent the Human talks to. Drives workspace orchestrators (and does workspace config) from outside the cockpit; not a pane. The only actor that edits the system/config itself.
+The external meta-orchestrator — the local Mac operator agent the Human talks to. Drives workspace orchestrators (and does workspace config) from outside the jumpcode; not a pane. The only actor that edits the system/config itself.
 
 **Relay**:
 The pattern by which one lead reaches another: it asks the orchestrator, which decides whether to forward. There is no direct lead-to-lead channel.

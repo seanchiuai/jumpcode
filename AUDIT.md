@@ -1,12 +1,12 @@
-> **SUPERSEDED (2026-06-06):** This audit predates the grilled-design rebuild. The dispatch rewrite and Linear-as-system-of-record (see CONTEXT.md + docs/adr/0001–0004 + docs/plans/2026-06-06-cockpit-rebuild.md) resolved or obsoleted most items here. Kept for history.
+> **SUPERSEDED (2026-06-06):** This audit predates the grilled-design rebuild. The dispatch rewrite and Linear-as-system-of-record (see CONTEXT.md + docs/adr/0001–0004 + docs/plans/2026-06-06-jumpcode-rebuild.md) resolved or obsoleted most items here. Kept for history.
 
-# Agent Cockpit — Code Audit & Roadmap
+# Jumpcode — Code Audit & Roadmap
 
 Date: 2026-06-06. Author: Hermes (dev takeover). Status: review only, no system changes made.
 
 ## Summary
 
-The cockpit is well-built: a clean ~446-line single-file Python core (`bin/cockpit`), event-sourced append-only JSONL, deterministic state reconstruction, thin bash wrappers, 5 passing tests. Design discipline is good (mail = source of truth; no daemon/db/cloud; only DONE/BLOCKED reports in v1).
+The jumpcode is well-built: a clean ~446-line single-file Python core (`bin/jumpcode`), event-sourced append-only JSONL, deterministic state reconstruction, thin bash wrappers, 5 passing tests. Design discipline is good (mail = source of truth; no daemon/db/cloud; only DONE/BLOCKED reports in v1).
 
 **Proven strength — continuity works.** The recurring pain across every session is "I lost the agent I was working with." This system exists to survive that, and it does: full project state (runs, tasks, mail, reports) was rebuilt from disk + the Hermes session DB during this takeover with nothing lost. That is the system's most important property and it is solid.
 
@@ -35,7 +35,7 @@ The unverified "live agent-to-agent comms" item is not merely untested — readi
 
 ## Architecture vs. the end-goal (multiple projects in parallel)
 
-- **Single global current run:** `state/current_run.json` is one file, so there is exactly one "current run" per `.agent-cockpit` home. The stated vision is multiple projects running in parallel. This is **the** architectural decision that blocks the vision. Options: (a) one `.agent-cockpit` per workspace selected via `COCKPIT_HOME`, or (b) scope current-run + state by workspace id. Decide before scaling past one project.
+- **Single global current run:** `state/current_run.json` is one file, so there is exactly one "current run" per `.jumpcode` home. The stated vision is multiple projects running in parallel. This is **the** architectural decision that blocks the vision. Options: (a) one `.jumpcode` per workspace selected via `JUMPCODE_HOME`, or (b) scope current-run + state by workspace id. Decide before scaling past one project.
 
 ## Open user-asks (not "deferred" — actively requested)
 
@@ -53,7 +53,7 @@ Coverage is happy-path only. Missing: concurrent id generation, unread/inbox-cur
 
 ## Proposed order of work
 
-1. **Fix the wake path** (`ask` → `@role` targeting) + add `mail inbox --unread`, then run the live orchestrator→lead→report→read loop end-to-end. Closes the open thread and makes the cockpit actually usable by live agents.
+1. **Fix the wake path** (`ask` → `@role` targeting) + add `mail inbox --unread`, then run the live orchestrator→lead→report→read loop end-to-end. Closes the open thread and makes the jumpcode actually usable by live agents.
 2. **Add `flock`** around `make_id`/`append_event` (concurrency correctness) + a concurrency test.
 3. **Decide multi-project model** (per-workspace home vs. workspace-scoped runs) — unblocks the parallel-projects vision.
 4. **Research + spike output eval/rating** (the twice-asked open request).

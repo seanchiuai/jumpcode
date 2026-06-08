@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-COCKPIT = ROOT / "bin" / "cockpit"
+JUMPCODE = ROOT / "bin" / "jumpcode"
 
 
 def write(path, text="prompt"):
@@ -19,11 +19,11 @@ class RoleDiscoveryTests(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.tmp = Path(self.tmpdir.name)
-        self.home = self.tmp / "cockpit"
+        self.home = self.tmp / "jumpcode"
         self.workspace = "webapp"
         self.workspace_root = self.tmp / "repo"
         self.central_roles = self.home / "roles"
-        self.local_roles = self.workspace_root / ".agent-cockpit" / "roles"
+        self.local_roles = self.workspace_root / ".jumpcode" / "roles"
         (self.home / "workspaces" / self.workspace).mkdir(parents=True)
         (self.home / "workspaces" / self.workspace / "workspace.json").write_text(
             json.dumps({"workspace_root": str(self.workspace_root), "role_runtimes": {}}),
@@ -35,9 +35,9 @@ class RoleDiscoveryTests(unittest.TestCase):
 
     def run_discover(self, check=True):
         env = os.environ.copy()
-        env["COCKPIT_HOME"] = str(self.home)
+        env["JUMPCODE_HOME"] = str(self.home)
         result = subprocess.run(
-            [sys.executable, str(COCKPIT), "roles", "discover", "--workspace", self.workspace, "--json"],
+            [sys.executable, str(JUMPCODE), "roles", "discover", "--workspace", self.workspace, "--json"],
             cwd=self.tmp,
             env=env,
             text=True,

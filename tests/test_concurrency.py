@@ -5,25 +5,25 @@ import unittest
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
-_COCKPIT = Path(__file__).resolve().parents[1] / "bin" / "cockpit"
+_JUMPCODE = Path(__file__).resolve().parents[1] / "bin" / "jumpcode"
 spec = importlib.util.spec_from_file_location(
-    "cockpit", _COCKPIT, loader=SourceFileLoader("cockpit", str(_COCKPIT))
+    "jumpcode", _JUMPCODE, loader=SourceFileLoader("jumpcode", str(_JUMPCODE))
 )
-cockpit = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(cockpit)
+jumpcode = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(jumpcode)
 
 
 class ConcurrencyTests(unittest.TestCase):
     def test_parallel_appends_unique_ids(self):
         with tempfile.TemporaryDirectory() as d:
-            home = Path(d) / ".agent-cockpit"
+            home = Path(d) / ".jumpcode"
 
             def one(i):
                 ev = {
                     "type": "dispatch.sent",
-                    "dispatch_id": cockpit.make_id(home, "dsp", "dispatch"),
+                    "dispatch_id": jumpcode.make_id(home, "dsp", "dispatch"),
                 }
-                cockpit.append_event(home, "dispatch", ev)
+                jumpcode.append_event(home, "dispatch", ev)
                 return ev["dispatch_id"]
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:

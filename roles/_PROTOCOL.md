@@ -1,14 +1,14 @@
-# Shared Protocol — How Cockpit Agents Interact
+# Shared Protocol — How Jumpcode Agents Interact
 
 Every charter in this folder points here. These rules are common to all roles; the
 role files only add what is specific to a role. Canonical terms live in
-`$COCKPIT_HOME/CONTEXT.md`; the reasoning behind these rules lives in `$COCKPIT_HOME/docs/adr/`.
+`$JUMPCODE_HOME/CONTEXT.md`; the reasoning behind these rules lives in `$JUMPCODE_HOME/docs/adr/`.
 
 ## The one mental model
 
 > Human + Hermes drive the **orchestrator**, which commands its **team leads**, which
 > invoke general **subagents** as a tool. **Projects and tasks live in Linear.** The
-> cockpit only moves messages between visible panes and remembers what was said.
+> jumpcode only moves messages between visible panes and remembers what was said.
 
 ## Where work lives: Linear, not here
 
@@ -23,7 +23,7 @@ role files only add what is specific to a role. Canonical terms live in
 - **Never create a Linear team.** The Linear MCP has no team-creation tool, and you must
   not improvise one — issues and projects attach to **existing** teams only.
 - **Never use Sean's personal team** `Sean Chiu` (key `SEA`,
-  id `a0a23983-bb30-4874-89c6-1df0bd2d1e99`) for cockpit work. It is his account's
+  id `a0a23983-bb30-4874-89c6-1df0bd2d1e99`) for jumpcode work. It is his account's
   default/onboarding team, not a work bucket.
 - The team (or project) for a task is **specified by the Human/orchestrator** — normally
   via the dispatch's `--project <LINEAR-PROJECT>` / `--task <LINEAR-ISSUE>`. If you need to
@@ -38,7 +38,7 @@ A **dispatch** is one directed message that does two things at once (ADR 0002): 
 **appended to the durable dispatch log**. Send one with:
 
 ```bash
-$COCKPIT_HOME/bin/dispatch send \
+$JUMPCODE_HOME/bin/dispatch send \
   --from <your-role> --to <recipient-role> \
   [--project <LINEAR-PROJECT>] [--task <LINEAR-ISSUE>] \
   [--subject "<short subject>"] \
@@ -54,8 +54,8 @@ $COCKPIT_HOME/bin/dispatch send \
 When your pane is woken, a one-line nudge appears. Read the full message:
 
 ```bash
-$COCKPIT_HOME/bin/dispatch inbox <your-role>      # everything addressed to you
-$COCKPIT_HOME/bin/dispatch show <dispatch-id>     # one message in full
+$JUMPCODE_HOME/bin/dispatch inbox <your-role>      # everything addressed to you
+$JUMPCODE_HOME/bin/dispatch show <dispatch-id>     # one message in full
 ```
 
 You cannot poll your own inbox unprompted — you act when woken. After finishing a
@@ -73,12 +73,12 @@ apart.
 
 ```bash
 # done
-$COCKPIT_HOME/bin/dispatch send --from <your-role> --to orchestrator \
+$JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator \
   --kind report-done --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> \
   "Summary; what changed; checks run; open concerns; recommended next step."
 
 # blocked
-$COCKPIT_HOME/bin/dispatch send --from <your-role> --to orchestrator \
+$JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator \
   --kind report-blocked --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> \
   "Blocker; why; what you tried; what you need from the orchestrator."
 ```
@@ -104,7 +104,7 @@ you have **no memory** of the prior session. Reconstruct context from the durabl
 sources: **Linear** (what the work is) and the **dispatch log** (what was said):
 
 ```bash
-$COCKPIT_HOME/bin/dispatch log 40
+$JUMPCODE_HOME/bin/dispatch log 40
 ```
 
 ## Health checks & subagent visibility
@@ -112,9 +112,9 @@ $COCKPIT_HOME/bin/dispatch log 40
 Hermes or the orchestrator can snapshot the whole team at any time:
 
 ```bash
-$COCKPIT_HOME/bin/health          # per-role: alive/stopped · working/waiting/idle · last-seen · subagents
-$COCKPIT_HOME/bin/health --json   # same, machine-readable
-$COCKPIT_HOME/bin/peek <role> [n] # read-only view of one role's pane (never wakes it)
+$JUMPCODE_HOME/bin/health          # per-role: alive/stopped · working/waiting/idle · last-seen · subagents
+$JUMPCODE_HOME/bin/health --json   # same, machine-readable
+$JUMPCODE_HOME/bin/peek <role> [n] # read-only view of one role's pane (never wakes it)
 ```
 
 `health` is the whole-team snapshot; `peek` reads a single pane's recent output when you
@@ -127,10 +127,10 @@ them. When you spawn or finish a subagent, send a `notice` whose subject follows
 exact convention:
 
 ```bash
-$COCKPIT_HOME/bin/dispatch send --from <your-role> --to orchestrator --kind notice \
+$JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator --kind notice \
   --subject "subagent:start <name>" "why you're spawning it"
 # ...and when it's done:
-$COCKPIT_HOME/bin/dispatch send --from <your-role> --to orchestrator --kind notice \
+$JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator --kind notice \
   --subject "subagent:end <name>" "result summary"
 ```
 

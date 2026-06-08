@@ -7,18 +7,18 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-COCKPIT = ROOT / ".agent-cockpit" / "bin" / "cockpit"
+JUMPCODE = ROOT / ".jumpcode" / "bin" / "jumpcode"
 
 
 def run_cmd(tmp_path, *args, check=True):
     env = os.environ.copy()
-    env["COCKPIT_HOME"] = str(tmp_path / ".agent-cockpit")
+    env["JUMPCODE_HOME"] = str(tmp_path / ".jumpcode")
     # Never let tests touch a real tmux session: clear both the explicit override
     # and $TMUX so resolve_session() returns "" and wake_pane() is a no-op.
-    env.pop("COCKPIT_TMUX_SESSION", None)
+    env.pop("JUMPCODE_TMUX_SESSION", None)
     env.pop("TMUX", None)
     result = subprocess.run(
-        [sys.executable, str(COCKPIT), *args],
+        [sys.executable, str(JUMPCODE), *args],
         cwd=tmp_path,
         text=True,
         capture_output=True,
@@ -60,7 +60,7 @@ class DispatchCliTests(unittest.TestCase):
         self.assertEqual(sent["body"], "Implement the auth endpoints.")
 
         # It is durably logged to the dispatch jsonl...
-        logged = read_jsonl(self.tmp_path / ".agent-cockpit" / "state" / "dispatches.jsonl")
+        logged = read_jsonl(self.tmp_path / ".jumpcode" / "state" / "dispatches.jsonl")
         self.assertEqual([m["dispatch_id"] for m in logged], [sent["dispatch_id"]])
 
         # ...and recoverable via inbox (addressed-to filter).
@@ -87,7 +87,7 @@ class DispatchCliTests(unittest.TestCase):
 
         # ...and so MUST the durable log line (this is the bug: today `woke` is
         # set on the event dict AFTER append_event, so the JSONL omits it).
-        logged = read_jsonl(self.tmp_path / ".agent-cockpit" / "state" / "dispatches.jsonl")
+        logged = read_jsonl(self.tmp_path / ".jumpcode" / "state" / "dispatches.jsonl")
         self.assertEqual(len(logged), 1)
         self.assertIn("woke", logged[0])
         self.assertEqual(logged[0]["woke"], sent["woke"])
@@ -153,7 +153,7 @@ class PeekTests(unittest.TestCase):
         self.tmpdir.cleanup()
 
     def test_peek_without_session_fails_gracefully(self):
-        # No COCKPIT_TMUX_SESSION and no $TMUX (run_cmd clears both) -> no session.
+        # No JUMPCODE_TMUX_SESSION and no $TMUX (run_cmd clears both) -> no session.
         # peek must exit non-zero with a clear message, never a traceback.
         r = run_cmd(self.tmp_path, "peek", "backend-lead", check=False)
         self.assertNotEqual(r.returncode, 0)

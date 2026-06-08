@@ -1,6 +1,6 @@
 # Communication Topology
 
-The cockpit uses a strict hub-and-spoke topology with the orchestrator as the hub, chosen over a free mesh so that all coordination has one accountable point and the message graph stays legible as agents multiply.
+The jumpcode uses a strict hub-and-spoke topology with the orchestrator as the hub, chosen over a free mesh so that all coordination has one accountable point and the message graph stays legible as agents multiply.
 
 ## The graph
 
@@ -19,7 +19,7 @@ Human/Hermes  ✗  Subagents               (never address subagents directly)
 
 ## Key asymmetry
 
-The **Human** may talk to team leads directly (they are visible panes the human can type into), but **Hermes** may not — Hermes commands only the orchestrator. This keeps the programmatic hierarchy clean (one machine-driven path) while preserving the human's freedom at the visible cockpit.
+The **Human** may talk to team leads directly (they are visible panes the human can type into), but **Hermes** may not — Hermes commands only the orchestrator. This keeps the programmatic hierarchy clean (one machine-driven path) while preserving the human's freedom at the visible jumpcode.
 
 ## Relay
 

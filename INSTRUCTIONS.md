@@ -1,11 +1,11 @@
-# Agent Cockpit Instructions
+# Jumpcode Instructions
 
 The local operator manual for Hermes/MacBook and any visible Claude Code pane (the
 orchestrator and team leads). Canonical terms live in [`CONTEXT.md`](CONTEXT.md); the
 reasoning lives in [`docs/adr/`](docs/adr/); the shared interaction rules for leads live
 in [`roles/_PROTOCOL.md`](roles/_PROTOCOL.md).
 
-## When to use the cockpit
+## When to use Jumpcode
 
 Use it whenever coordination needs to be **delivered live and remembered**:
 
@@ -19,7 +19,7 @@ For tiny one-shot answers, do not send dispatches.
 
 A **project** is a Linear project; a **task** is a Linear issue (ADR 0003). Read and
 write them with the Linear MCP. There is **no local task/project/run registry** — the
-cockpit owns only delivery (wake) and the dispatch log. "Done" is informal: update the
+jumpcode owns only delivery (wake) and the dispatch log. "Done" is informal: update the
 Linear issue and report via dispatch.
 
 ## Source of truth
@@ -27,13 +27,13 @@ Linear issue and report via dispatch.
 Machine-readable dispatch record:
 
 ```text
-.agent-cockpit/state/dispatches.jsonl
+.jumpcode/state/dispatches.jsonl
 ```
 
 Human-readable feed:
 
 ```text
-.agent-cockpit/shared/conversation.log
+.jumpcode/shared/conversation.log
 ```
 
 ## Command contract
@@ -48,24 +48,24 @@ The single verb is `dispatch`:
 
 ```bash
 # send a dispatch (live wake + durable log)
-./.agent-cockpit/bin/dispatch send --from orchestrator --to backend-lead \
+./.jumpcode/bin/dispatch send --from orchestrator --to backend-lead \
   --task <LINEAR-ISSUE> --subject "Start work" "Please implement X."
 
 # report (close the loop): pair the report to its request with --reply-to
-./.agent-cockpit/bin/dispatch send --from backend-lead --to orchestrator \
+./.jumpcode/bin/dispatch send --from backend-lead --to orchestrator \
   --kind report-done --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> "Done; …"
 
 # inspect
-./.agent-cockpit/bin/dispatch inbox backend-lead
-./.agent-cockpit/bin/dispatch show <dispatch-id>
-./.agent-cockpit/bin/dispatch log 40
+./.jumpcode/bin/dispatch inbox backend-lead
+./.jumpcode/bin/dispatch show <dispatch-id>
+./.jumpcode/bin/dispatch log 40
 
 # wrappers
-./.agent-cockpit/bin/status        # open loops: requests with no matching report (+ pane state)
-./.agent-cockpit/bin/health        # per-role: alive · working/waiting/idle · runtime · subagents
-./.agent-cockpit/bin/peek <role> [n] # read-only view of a role's pane (never wakes it)
-./.agent-cockpit/bin/convo 80      # tail the conversation feed
-./.agent-cockpit/bin/start-webapp  # launch the webapp grid (fresh)
+./.jumpcode/bin/status        # open loops: requests with no matching report (+ pane state)
+./.jumpcode/bin/health        # per-role: alive · working/waiting/idle · runtime · subagents
+./.jumpcode/bin/peek <role> [n] # read-only view of a role's pane (never wakes it)
+./.jumpcode/bin/convo 80      # tail the conversation feed
+./.jumpcode/bin/start-webapp  # launch the webapp grid (fresh)
 ```
 
 ## Reporting discipline
@@ -75,12 +75,12 @@ When a unit of work finishes or stalls, send a dispatch back to whoever assigned
 
 ```bash
 # done
-./.agent-cockpit/bin/dispatch send --from backend-lead --to orchestrator \
+./.jumpcode/bin/dispatch send --from backend-lead --to orchestrator \
   --kind report-done --task <LINEAR-ISSUE> \
   "Summary; what changed; checks run; open concerns; recommended next step."
 
 # blocked
-./.agent-cockpit/bin/dispatch send --from backend-lead --to orchestrator \
+./.jumpcode/bin/dispatch send --from backend-lead --to orchestrator \
   --kind report-blocked --task <LINEAR-ISSUE> \
   "Blocker; why; what you tried; what you need from the orchestrator."
 ```
@@ -97,12 +97,12 @@ another lead. Neither Human nor Hermes addresses subagents directly.
 ## Continuity
 
 Panes launch fresh with no session resume (ADR 0004). Reconstruct context from Linear
-and the dispatch log (`./.agent-cockpit/bin/dispatch log 40`).
+and the dispatch log (`./.jumpcode/bin/dispatch log 40`).
 
 ## Testing after changes
 
 ```bash
-python3 -m py_compile .agent-cockpit/bin/cockpit
-bash -n .agent-cockpit/bin/dispatch .agent-cockpit/bin/convo .agent-cockpit/bin/status .agent-cockpit/bin/start-webapp
-python3 .agent-cockpit/tests/test_cockpit.py
+python3 -m py_compile .jumpcode/bin/jumpcode
+bash -n .jumpcode/bin/dispatch .jumpcode/bin/convo .jumpcode/bin/status .jumpcode/bin/start-webapp
+python3 .jumpcode/tests/test_jumpcode.py
 ```

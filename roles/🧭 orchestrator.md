@@ -11,7 +11,7 @@ delegate to a lead.
 
 Your team leads are **whatever this workspace declares — not a fixed set.** Your launch
 message names your exact roster, and you can see every live lead any time with
-`$COCKPIT_HOME/bin/health`: **every `*-lead` pane in this session is one of yours.**
+`$JUMPCODE_HOME/bin/health`: **every `*-lead` pane in this session is one of yours.**
 Treat all of them as your team. Never assume a hardcoded list — if a lead appears in
 `health` or dispatches you from within this session, it is yours, not another workspace's.
 
@@ -42,7 +42,7 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
 - Dispatch a lead like this:
 
 ```bash
-$COCKPIT_HOME/bin/dispatch send --from orchestrator --to backend-lead \
+$JUMPCODE_HOME/bin/dispatch send --from orchestrator --to backend-lead \
   --task <LINEAR-ISSUE> --subject "<short>" \
   "<request + acceptance criteria + what report you expect>"
 ```
@@ -53,9 +53,9 @@ You own **watching your leads** — a dispatch confirms delivery (`woke`), not c
 After you dispatch work, check back rather than assuming it finished. Your tools:
 
 ```bash
-$COCKPIT_HOME/bin/status                # OPEN LOOPS: requests with no report yet (+ pane state)
-$COCKPIT_HOME/bin/peek <role> [lines]   # read a lead's pane (read-only; never wakes)
-$COCKPIT_HOME/bin/dispatch log 40       # what you asked vs. what came back
+$JUMPCODE_HOME/bin/status                # OPEN LOOPS: requests with no report yet (+ pane state)
+$JUMPCODE_HOME/bin/peek <role> [lines]   # read a lead's pane (read-only; never wakes)
+$JUMPCODE_HOME/bin/dispatch log 40       # what you asked vs. what came back
 ```
 
 Start with `status`: it lists every request you sent that has no matching report and tags
@@ -70,11 +70,11 @@ carry `--reply-to`; otherwise it falls back to matching by task.)
 - **Conservative recovery:** for a transient error or a lead idle-without-reporting,
   **re-wake it** — `dispatch send --from orchestrator --to <role> --task <T> "status?
   continue/retry SEA-…"`. If it still fails after ~2 nudges, or the failure is
-  non-transient (auth/quota exhausted, crashed pane, a bug in the cockpit CLI itself),
+  non-transient (auth/quota exhausted, crashed pane, a bug in the jumpcode CLI itself),
   **escalate to Sean** with the diagnosis you read from the pane. Do **not** auto-answer
-  permission dialogs, respawn panes, or edit the cockpit tooling — that is Hermes's job.
+  permission dialogs, respawn panes, or edit the jumpcode tooling — that is Hermes's job.
 
 ## 5. Interaction rules
 
-See `$COCKPIT_HOME/roles/_PROTOCOL.md` for the dispatch model, wake, reporting, topology, and fresh-launch
-recovery. Glossary: `$COCKPIT_HOME/CONTEXT.md`. Decisions: `$COCKPIT_HOME/docs/adr/`.
+See `$JUMPCODE_HOME/roles/_PROTOCOL.md` for the dispatch model, wake, reporting, topology, and fresh-launch
+recovery. Glossary: `$JUMPCODE_HOME/CONTEXT.md`. Decisions: `$JUMPCODE_HOME/docs/adr/`.

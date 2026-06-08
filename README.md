@@ -1,4 +1,4 @@
-# Local Agent Cockpit Orchestration
+# Local Jumpcode Orchestration
 
 This directory is the local, project-owned orchestration layer for `workspace-macbook`.
 It is intentionally small: no daemon, no database, no cloud dependency. It owns only the
@@ -13,14 +13,14 @@ conflicts.
 
 > Human + Hermes drive the **orchestrator**, which commands its **team leads**, which
 > invoke general **subagents** as a tool. **Projects and tasks live in Linear.** The
-> cockpit only moves messages between visible panes and remembers what was said.
+> jumpcode only moves messages between visible panes and remembers what was said.
 
 ## Core primitive: the dispatch
 
 A **dispatch** (ADR 0002) is one directed message that does two things at once:
 
 - **Delivered live** — a prompt is injected ("wake") into the recipient's tmux pane,
-  targeted by its stable `@cockpit_role` option, so the agent gets to work immediately.
+  targeted by its stable `@jumpcode_role` option, so the agent gets to work immediately.
 - **Appended to the durable dispatch log** — so a restarted agent, or Human/Hermes, can
   reconstruct what was asked and what happened.
 
@@ -28,7 +28,7 @@ There is a single CLI verb, `dispatch`:
 
 ```bash
 # send (live wake + durable log)
-./.agent-cockpit/bin/dispatch send \
+./.jumpcode/bin/dispatch send \
   --from <role> --to <role> \
   [--project <LINEAR-PROJECT>] [--task <LINEAR-ISSUE>] \
   [--subject "<subject>"] \
@@ -37,15 +37,15 @@ There is a single CLI verb, `dispatch`:
   "<body>"
 
 # inspect
-./.agent-cockpit/bin/dispatch inbox <role> [--json]   # dispatches addressed to a role
-./.agent-cockpit/bin/dispatch show <dispatch-id> [--json]
-./.agent-cockpit/bin/dispatch log [N]                 # human-readable feed (default 40)
-./.agent-cockpit/bin/dispatch status [--json]         # open loops: requests with no matching report (+ pane state)
+./.jumpcode/bin/dispatch inbox <role> [--json]   # dispatches addressed to a role
+./.jumpcode/bin/dispatch show <dispatch-id> [--json]
+./.jumpcode/bin/dispatch log [N]                 # human-readable feed (default 40)
+./.jumpcode/bin/dispatch status [--json]         # open loops: requests with no matching report (+ pane state)
 
 # monitor
-./.agent-cockpit/bin/health [--json]                  # per-role: alive · working/waiting/idle · runtime · subagents
-./.agent-cockpit/bin/peek <role> [lines]              # read-only view of a role's pane (never wakes it)
-./.agent-cockpit/bin/cockpit roles discover --workspace <name> --json  # validated role discovery
+./.jumpcode/bin/health [--json]                  # per-role: alive · working/waiting/idle · runtime · subagents
+./.jumpcode/bin/peek <role> [lines]              # read-only view of a role's pane (never wakes it)
+./.jumpcode/bin/jumpcode roles discover --workspace <name> --json  # validated role discovery
 ```
 
 Default `--kind` is `request`. Use `reply` to answer one, `notice` for an FYI,
@@ -58,14 +58,14 @@ logs without injecting (scripted/batch use); normal sends always wake.
 The only state file is append-only JSONL:
 
 ```text
-.agent-cockpit/state/dispatches.jsonl
+.jumpcode/state/dispatches.jsonl
 ```
 
 (plus an internal `state/counters.json` for id reservation and a `state/.lock`).
 Human-readable activity is mirrored to:
 
 ```text
-.agent-cockpit/shared/conversation.log
+.jumpcode/shared/conversation.log
 ```
 
 ## Convenience wrappers
@@ -77,12 +77,12 @@ Human-readable activity is mirrored to:
 ## Where work lives: Linear
 
 A **project** is a Linear project; a **task** is a Linear issue (ADR 0003). Agents read
-and update them via the Linear MCP. The cockpit keeps **no** local copy of project/task state.
+and update them via the Linear MCP. The jumpcode keeps **no** local copy of project/task state.
 "Done" is informal: update the Linear issue and send a `report-done` dispatch.
 
 ## Roles and topology
 
-Role panes are discovered from prompt folders, not roster JSON. Central `$COCKPIT_HOME/roles` is the base set; a repo may add `$WORKSPACE_ROOT/.agent-cockpit/roles` files that overlay central prompts by canonical role id. A repo-local `_PROTOCOL.md` overrides the central protocol when present; otherwise the central `_PROTOCOL.md` is used. `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and must not contain team roster maps.
+Role panes are discovered from prompt folders, not roster JSON. Central `$JUMPCODE_HOME/roles` is the base set; a repo may add `$WORKSPACE_ROOT/.jumpcode/roles` files that overlay central prompts by canonical role id. A repo-local `_PROTOCOL.md` overrides the central protocol when present; otherwise the central `_PROTOCOL.md` is used. `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and must not contain team roster maps.
 
 - **Orchestrator** — one per workspace, the single accountable agent; a visible right
   pane. Receives goals from Human/Hermes, decomposes into Linear issues, commands leads.
