@@ -16,9 +16,15 @@ if [[ -z "${JUMPCODE_HOME:-}" ]]; then
   fi
 fi
 JUMPCODE_BIN="$JUMPCODE_HOME/bin"
-SESSION="${JUMPCODE_TMUX_SESSION:-macbook-webapp}"
+# Per-workspace session so multiple workspaces run side by side instead of evicting each
+# other. Default workspace 'webapp' keeps its historical name 'macbook-webapp'.
+SESSION="${JUMPCODE_TMUX_SESSION:-macbook-${JUMPCODE_WORKSPACE:-webapp}}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CODEX_BIN="${CODEX_BIN:-/Applications/Codex.app/Contents/Resources/codex}"
+# Per-runtime launch flags appended after the program. Codex defaults to --yolo
+# (no approval prompts) so visible panes run unattended; override with CODEX_ARGS=''.
+CLAUDE_ARGS="${CLAUDE_ARGS:-}"
+CODEX_ARGS="${CODEX_ARGS:---yolo}"
 KILL_EXISTING="${JUMPCODE_KILL_EXISTING:-1}"
 
 # Runtime registry (inline, data-shaped — borrow Claude Squad's "profile" idea without a
@@ -32,6 +38,15 @@ runtime_program() {
   esac
 }
 
+# Extra CLI flags per runtime (e.g. codex --yolo for unattended panes).
+runtime_args() {
+  case "$1" in
+    claude) printf '%s' "$CLAUDE_ARGS" ;;
+    codex)  printf '%s' "$CODEX_ARGS" ;;
+    *)      printf '' ;;
+  esac
+}
+
 cd "$ROOT"
 
 agent_cmd() {
@@ -41,6 +56,8 @@ agent_cmd() {
   local program
   program="$(runtime_program "$runtime")"
   [[ -z "$program" ]] && program="$CLAUDE_BIN"   # safety net; preflight already validated
+  local rt_args
+  rt_args="$(runtime_args "$runtime")"
   cat <<EOF
 cd "$WORKSPACE_ROOT"
 export JUMPCODE_TMUX_SESSION="$SESSION"
@@ -50,7 +67,7 @@ clear
 printf 'MacBook webapp jumpcode role: %s (%s)\\n' "$role" "$runtime"
 printf 'Prompt file: %s\\n\\n' "$prompt_file"
 printf '%s will start now. Initial instructions will be injected by tmux.\\n' "$runtime"
-exec "$program"
+exec "$program" $rt_args
 EOF
 }
 
@@ -138,6 +155,12 @@ done
 # fail once there are several leads.)
 ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${JUMPCODE_COLS:-260}" -y "${JUMPCODE_ROWS:-72}" -s "$SESSION" -n roles -c "$WORKSPACE_ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME")")
 
+# Keep panes that exit during the startup window REVIVABLE rather than letting tmux drop
+# them (a dropped pane collapses the grid and loses a role). codex's TUI occasionally
+# exits cleanly right after launch (an init race); the reconcile pass below respawns any
+# such straggler. Turned back off once the grid has settled.
+tmux set-option -w -t "$SESSION:roles" remain-on-exit on >/dev/null 2>&1 || true
+
 # Lead panes laid out in COLUMNS of at most MAX_PER_COL, to the LEFT of the orchestrator.
 # No column holds more than MAX_PER_COL panes; with more leads we add another column
 # instead of a taller stack. Order is left->right then top->bottom, in workspace order.
@@ -191,11 +214,15 @@ tmux set-option -pt "$ORCH" @role "$ORCH_NAME · owns this column"
 tmux set-option -pt "$ORCH" @jumpcode_role "orchestrator"
 tmux set-option -pt "$ORCH" @jumpcode_runtime "$ORCH_RUNTIME"
 
-# Even the column widths (orchestrator + NCOLS lead columns), then even rows per column.
+# The orchestrator owns the RIGHT HALF of the screen; all lead columns share the LEFT
+# half, split evenly among them. So each lead column is (WINDOW_WIDTH/2)/NCOLS wide and
+# the orchestrator keeps the remaining ~half, no matter how many lead columns there are.
+# Then even the rows within each column.
 WINDOW_WIDTH=$(tmux display-message -p -t "$SESSION:roles" '#{window_width}' 2>/dev/null || echo 200)
 WIN_H=$(tmux display-message -p -t "$SESSION:roles" '#{window_height}' 2>/dev/null || echo 50)
 if (( NCOLS > 0 )); then
-  col_w=$(( WINDOW_WIDTH / (NCOLS + 1) ))
+  col_w=$(( WINDOW_WIDTH / 2 / NCOLS ))
+  (( col_w < 1 )) && col_w=1
   for (( c=0; c<NCOLS; c++ )); do
     [[ -n "${COL_HEADS[$c]:-}" ]] && tmux resize-pane -t "${COL_HEADS[$c]}" -x "$col_w" >/dev/null 2>&1 || true
     rows=$(( N - c * MAX_PER_COL )); if (( rows > MAX_PER_COL )); then rows=$MAX_PER_COL; fi
@@ -252,6 +279,36 @@ for (( i=0; i<N; i++ )); do
   p="${LEAD_PANE[$i]:-}"
   [[ -n "$p" ]] && send_initial "$p" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}"
 done
+
+# Reconcile stragglers: respawn any role pane whose runtime exited during startup, then
+# re-send its initial prompt, so the grid always comes up complete. Up to two rounds.
+RESP_PANES=(); RESP_ROLES=(); RESP_PF=(); RESP_EXTRA=()
+respawn_if_dead() {   # pane role prompt runtime display extra
+  local pane="$1" role="$2" pf="$3" rt="$4" disp="$5" extra="${6:-}"
+  [[ -z "$pane" ]] && return 0
+  [[ "$(tmux display-message -p -t "$pane" '#{pane_dead}' 2>/dev/null || echo 1)" != "1" ]] && return 0
+  tmux respawn-pane -k -t "$pane" -c "$WORKSPACE_ROOT" "$(agent_cmd "$role" "$pf" "$rt")" 2>/dev/null || return 0
+  tmux select-pane -t "$pane" -T "$disp" 2>/dev/null || true
+  tmux set-option -pt "$pane" @role "$disp" 2>/dev/null || true
+  tmux set-option -pt "$pane" @jumpcode_role "$role" 2>/dev/null || true
+  tmux set-option -pt "$pane" @jumpcode_runtime "$rt" 2>/dev/null || true
+  RESP_PANES+=("$pane"); RESP_ROLES+=("$role"); RESP_PF+=("$pf"); RESP_EXTRA+=("$extra")
+}
+for round in 1 2; do
+  RESP_PANES=(); RESP_ROLES=(); RESP_PF=(); RESP_EXTRA=()
+  respawn_if_dead "$ORCH" orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME" "$ORCH_NAME" "$ORCH_EXTRA"
+  for (( i=0; i<N; i++ )); do
+    respawn_if_dead "${LEAD_PANE[$i]:-}" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}" "${LEAD_RUNTIMES[$i]}" "${LEAD_NAMES[$i]}" ""
+  done
+  (( ${#RESP_PANES[@]} == 0 )) && break
+  echo "reconcile round $round: respawned ${#RESP_PANES[@]} straggler pane(s)" >&2
+  sleep "${JUMPCODE_RESPAWN_DELAY:-6}"
+  for (( j=0; j<${#RESP_PANES[@]}; j++ )); do
+    send_initial "${RESP_PANES[$j]}" "${RESP_ROLES[$j]}" "${RESP_PF[$j]}" "${RESP_EXTRA[$j]}"
+  done
+done
+# Grid settled: restore normal exit behavior so a later crash is visible to health, not retained forever.
+tmux set-option -w -t "$SESSION:roles" remain-on-exit off >/dev/null 2>&1 || true
 
 # Open visible iTerm window if available. If Automation permissions block this, tmux still runs.
 if [[ "${JUMPCODE_OPEN_ITERM:-1}" == "1" ]]; then
