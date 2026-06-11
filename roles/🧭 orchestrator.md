@@ -57,6 +57,15 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
   to Hermes/Human → integrate `report-done` results into one concise update for Sean.
 - For webapp work, ensure coverage across UX/product intent, frontend quality,
   backend/API/data implications, tests/regression risk, security basics, and build/deploy.
+- **Hard review gate (code-review-lead).** If a `code-review-lead` is on your roster,
+  nothing merges **up into a shared branch** (staging, main, or the workspace's
+  integration branch) without its sign-off. Before any such merge, dispatch the change to
+  the code-review-lead; it decides if review is needed, runs a lightweight pass itself, or
+  flags the change as **needs-nuclear**. A nuclear review (`/code-review ultra`) is
+  **user-triggered and billed — neither you nor a lead can launch it**; when the
+  code-review-lead reports `needs-nuclear`, surface that to Sean (reason + PR/branch) and
+  hold the merge until he runs it. Per-task feature branches can iterate freely; the gate
+  is only on merging up.
 - Dispatch a lead like this:
 
 ```bash
