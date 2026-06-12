@@ -63,9 +63,18 @@ agent_cmd() {
   # For claude, pin the session id so every launched role is recorded and deterministically
   # resumable (no reverse-engineering from transcripts). A fresh launch assigns the id with
   # --session-id; the reconcile/respawn pass reconnects to it with --resume.
-  local sid_args=""
+  # Build the final launch line. Fresh claude launches pin a new id with --session-id. A
+  # respawn RESUMES the recorded id, but falls back to creating it fresh under the same id
+  # if that session was never persisted — a straggler that died before its first write makes
+  # `claude --resume` exit 1 ("No conversation found"), and `--session-id` on an id that DID
+  # persist exits 1 ("already in use"), so neither flag alone is safe on the respawn path.
+  local launch="exec \"$program\" $rt_args"
   if [[ "$runtime" == "claude" && -n "$sid" ]]; then
-    if [[ -n "$resume" ]]; then sid_args="--resume $sid"; else sid_args="--session-id $sid"; fi
+    if [[ -n "$resume" ]]; then
+      launch="\"$program\" $rt_args --resume $sid || exec \"$program\" $rt_args --session-id $sid"
+    else
+      launch="exec \"$program\" $rt_args --session-id $sid"
+    fi
   fi
   cat <<EOF
 cd "$WORKSPACE_ROOT"
@@ -76,7 +85,7 @@ clear
 printf 'MacBook webapp jumpcode role: %s (%s)\\n' "$role" "$runtime"
 printf 'Prompt file: %s\\n\\n' "$prompt_file"
 printf '%s will start now. Initial instructions will be injected by tmux.\\n' "$runtime"
-exec "$program" $rt_args $sid_args
+$launch
 EOF
 }
 
@@ -108,6 +117,7 @@ SHARED_PROTOCOL="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["prot
 # Human-facing task title for the orchestrator's column (workspace.json "title"; falls back
 # to the workspace name). Shown on the orchestrator pane border instead of a generic label.
 WORKSPACE_TITLE="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("title") or d["workspace"])' <<<"$DISCOVERY_JSON")"
+ORCH_LABEL="🧭 $WORKSPACE_TITLE"   # orchestrator border, used on both the normal and respawn paths
 
 ORCH_PROMPT=""
 ORCH_NAME="orchestrator"
@@ -234,8 +244,8 @@ done
 
 # Orchestrator labels. The border shows the workspace's TASK (workspace.json "title"), not a
 # generic "owns this column" — the orchestrator still owns the right column by position.
-tmux select-pane -t "$ORCH" -T "🧭 $WORKSPACE_TITLE"
-tmux set-option -pt "$ORCH" @role "🧭 $WORKSPACE_TITLE"
+tmux select-pane -t "$ORCH" -T "$ORCH_LABEL"
+tmux set-option -pt "$ORCH" @role "$ORCH_LABEL"
 tmux set-option -pt "$ORCH" @jumpcode_role "orchestrator"
 tmux set-option -pt "$ORCH" @jumpcode_runtime "$ORCH_RUNTIME"
 
@@ -322,7 +332,7 @@ respawn_if_dead() {   # pane role prompt runtime display extra sid
 }
 for round in 1 2; do
   RESP_PANES=(); RESP_ROLES=(); RESP_PF=(); RESP_EXTRA=()
-  respawn_if_dead "$ORCH" orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME" "$ORCH_NAME" "$ORCH_EXTRA" "$ORCH_SID"
+  respawn_if_dead "$ORCH" orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME" "$ORCH_LABEL" "$ORCH_EXTRA" "$ORCH_SID"
   for (( i=0; i<N; i++ )); do
     respawn_if_dead "${LEAD_PANE[$i]:-}" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}" "${LEAD_RUNTIMES[$i]}" "${LEAD_NAMES[$i]}" "" "${LEAD_SIDS[$i]:-}"
   done
@@ -340,7 +350,7 @@ tmux set-option -w -t "$SESSION:roles" remain-on-exit off >/dev/null 2>&1 || tru
 # resumed deterministically after a relogin/crash without reverse-engineering transcripts.
 # One file per workspace, overwritten each launch: $JUMPCODE_HOME/state/sessions/<workspace>.json
 SESSION_DIR="$JUMPCODE_HOME/state/sessions"
-mkdir -p "$SESSION_DIR"
+mkdir -p "$SESSION_DIR" 2>/dev/null || true   # never abort the launch on a recording-dir hiccup (set -e)
 {
   printf '%s\t%s\t%s\t%s\n' "orchestrator" "$ORCH" "$ORCH_RUNTIME" "$ORCH_SID"
   for (( i=0; i<N; i++ )); do
@@ -354,7 +364,9 @@ for line in sys.stdin:
     if len(p) < 4 or not p[0]:
         continue
     role, pane, rt, sid = p[:4]
-    roles.append({"role": role, "pane": pane, "runtime": rt, "session_id": sid or None})
+    # a pane that never spawned (the "no room" path) has no live session, so record null
+    # rather than a uuid that was assigned but never passed to `claude --session-id`.
+    roles.append({"role": role, "pane": pane, "runtime": rt, "session_id": (sid or None) if pane else None})
 out = {"workspace": os.environ["WS"], "session": os.environ["SESS"],
        "workspace_root": os.environ["WROOT"], "recorded_by": "start-webapp",
        "roles": sorted(roles, key=lambda r: r["role"])}
