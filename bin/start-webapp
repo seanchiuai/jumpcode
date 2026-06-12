@@ -53,11 +53,20 @@ agent_cmd() {
   local role="$1"
   local prompt_file="$2"
   local runtime="${3:-claude}"
+  local sid="${4:-}"        # claude session id to pin (recorded in the launch manifest)
+  local resume="${5:-}"     # non-empty => resume the sid instead of starting it (respawn path)
   local program
   program="$(runtime_program "$runtime")"
   [[ -z "$program" ]] && program="$CLAUDE_BIN"   # safety net; preflight already validated
   local rt_args
   rt_args="$(runtime_args "$runtime")"
+  # For claude, pin the session id so every launched role is recorded and deterministically
+  # resumable (no reverse-engineering from transcripts). A fresh launch assigns the id with
+  # --session-id; the reconcile/respawn pass reconnects to it with --resume.
+  local sid_args=""
+  if [[ "$runtime" == "claude" && -n "$sid" ]]; then
+    if [[ -n "$resume" ]]; then sid_args="--resume $sid"; else sid_args="--session-id $sid"; fi
+  fi
   cat <<EOF
 cd "$WORKSPACE_ROOT"
 export JUMPCODE_TMUX_SESSION="$SESSION"
@@ -67,7 +76,7 @@ clear
 printf 'MacBook webapp jumpcode role: %s (%s)\\n' "$role" "$runtime"
 printf 'Prompt file: %s\\n\\n' "$prompt_file"
 printf '%s will start now. Initial instructions will be injected by tmux.\\n' "$runtime"
-exec "$program" $rt_args
+exec "$program" $rt_args $sid_args
 EOF
 }
 
@@ -96,6 +105,9 @@ fi
 # role <TAB> prompt_file <TAB> display_name <TAB> runtime <TAB> kind
 WORKSPACE_ROOT="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["workspace_root"])' <<<"$DISCOVERY_JSON")"
 SHARED_PROTOCOL="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["protocol"])' <<<"$DISCOVERY_JSON")"
+# Human-facing task title for the orchestrator's column (workspace.json "title"; falls back
+# to the workspace name). Shown on the orchestrator pane border instead of a generic label.
+WORKSPACE_TITLE="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("title") or d["workspace"])' <<<"$DISCOVERY_JSON")"
 
 ORCH_PROMPT=""
 ORCH_NAME="orchestrator"
@@ -149,11 +161,23 @@ for rt in "$ORCH_RUNTIME" "${LEAD_RUNTIMES[@]:-}"; do
   fi
 done
 
+# Pre-assign a claude session id per role (orchestrator + each lead) so every launched
+# pane is recorded in a manifest and can be resumed deterministically. codex roles get no
+# id (different session model). Generated up front so the same id is used at launch and on
+# any reconcile/respawn below.
+gen_sid() { uuidgen | tr 'A-Z' 'a-z'; }
+ORCH_SID=""
+[[ "$ORCH_RUNTIME" == "claude" ]] && ORCH_SID="$(gen_sid)"
+LEAD_SIDS=()
+for (( i=0; i<${#LEAD_ROLES[@]}; i++ )); do
+  if [[ "${LEAD_RUNTIMES[$i]}" == "claude" ]]; then LEAD_SIDS[$i]="$(gen_sid)"; else LEAD_SIDS[$i]=""; fi
+done
+
 # Orchestrator pane: the fixed right column.
 # Create at a generous virtual size so a tall left column of leads has room to split;
 # tmux resizes to the client when one attaches. (A tiny default size makes split-window
 # fail once there are several leads.)
-ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${JUMPCODE_COLS:-260}" -y "${JUMPCODE_ROWS:-72}" -s "$SESSION" -n roles -c "$WORKSPACE_ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME")")
+ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${JUMPCODE_COLS:-260}" -y "${JUMPCODE_ROWS:-72}" -s "$SESSION" -n roles -c "$WORKSPACE_ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME" "$ORCH_SID")")
 
 # Keep panes that exit during the startup window REVIVABLE rather than letting tmux drop
 # them (a dropped pane collapses the grid and loses a role). codex's TUI occasionally
@@ -177,7 +201,7 @@ if (( N > 0 )); then NCOLS=$(( (N + MAX_PER_COL - 1) / MAX_PER_COL )); fi
 for (( c=0; c<NCOLS; c++ )); do
   idx=$(( c * MAX_PER_COL ))
   head=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$WORKSPACE_ROOT" \
-           "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}")") \
+           "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}" "${LEAD_SIDS[$idx]:-}")") \
     || { echo "warn: no room for lead column $c — raise JUMPCODE_COLS" >&2; continue; }
   LEAD_PANE[$idx]=$head
   COL_HEADS[$c]=$head
@@ -191,7 +215,7 @@ for (( c=0; c<NCOLS; c++ )); do
     idx=$(( c * MAX_PER_COL + r ))
     if (( idx >= N )); then break; fi
     pane=$(tmux split-window -P -F '#{pane_id}' -t "$prev" -v -c "$WORKSPACE_ROOT" \
-             "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}")") \
+             "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}" "${LEAD_SIDS[$idx]:-}")") \
       || { echo "warn: no room for lead '${LEAD_ROLES[$idx]}' — raise JUMPCODE_ROWS" >&2; continue; }
     LEAD_PANE[$idx]=$pane
     prev=$pane
@@ -208,9 +232,10 @@ for (( i=0; i<N; i++ )); do
   tmux set-option -pt "$p" @jumpcode_runtime "${LEAD_RUNTIMES[$i]}"
 done
 
-# Orchestrator labels (the one role tied to a position: it owns the right column).
-tmux select-pane -t "$ORCH" -T "$ORCH_NAME"
-tmux set-option -pt "$ORCH" @role "$ORCH_NAME · owns this column"
+# Orchestrator labels. The border shows the workspace's TASK (workspace.json "title"), not a
+# generic "owns this column" — the orchestrator still owns the right column by position.
+tmux select-pane -t "$ORCH" -T "🧭 $WORKSPACE_TITLE"
+tmux set-option -pt "$ORCH" @role "🧭 $WORKSPACE_TITLE"
 tmux set-option -pt "$ORCH" @jumpcode_role "orchestrator"
 tmux set-option -pt "$ORCH" @jumpcode_runtime "$ORCH_RUNTIME"
 
@@ -283,11 +308,12 @@ done
 # Reconcile stragglers: respawn any role pane whose runtime exited during startup, then
 # re-send its initial prompt, so the grid always comes up complete. Up to two rounds.
 RESP_PANES=(); RESP_ROLES=(); RESP_PF=(); RESP_EXTRA=()
-respawn_if_dead() {   # pane role prompt runtime display extra
-  local pane="$1" role="$2" pf="$3" rt="$4" disp="$5" extra="${6:-}"
+respawn_if_dead() {   # pane role prompt runtime display extra sid
+  local pane="$1" role="$2" pf="$3" rt="$4" disp="$5" extra="${6:-}" sid="${7:-}"
   [[ -z "$pane" ]] && return 0
   [[ "$(tmux display-message -p -t "$pane" '#{pane_dead}' 2>/dev/null || echo 1)" != "1" ]] && return 0
-  tmux respawn-pane -k -t "$pane" -c "$WORKSPACE_ROOT" "$(agent_cmd "$role" "$pf" "$rt")" 2>/dev/null || return 0
+  # resume the pane's recorded session id (5th agent_cmd arg) so a straggler keeps its thread
+  tmux respawn-pane -k -t "$pane" -c "$WORKSPACE_ROOT" "$(agent_cmd "$role" "$pf" "$rt" "$sid" resume)" 2>/dev/null || return 0
   tmux select-pane -t "$pane" -T "$disp" 2>/dev/null || true
   tmux set-option -pt "$pane" @role "$disp" 2>/dev/null || true
   tmux set-option -pt "$pane" @jumpcode_role "$role" 2>/dev/null || true
@@ -296,9 +322,9 @@ respawn_if_dead() {   # pane role prompt runtime display extra
 }
 for round in 1 2; do
   RESP_PANES=(); RESP_ROLES=(); RESP_PF=(); RESP_EXTRA=()
-  respawn_if_dead "$ORCH" orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME" "$ORCH_NAME" "$ORCH_EXTRA"
+  respawn_if_dead "$ORCH" orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME" "$ORCH_NAME" "$ORCH_EXTRA" "$ORCH_SID"
   for (( i=0; i<N; i++ )); do
-    respawn_if_dead "${LEAD_PANE[$i]:-}" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}" "${LEAD_RUNTIMES[$i]}" "${LEAD_NAMES[$i]}" ""
+    respawn_if_dead "${LEAD_PANE[$i]:-}" "${LEAD_ROLES[$i]}" "${LEAD_PROMPTS[$i]}" "${LEAD_RUNTIMES[$i]}" "${LEAD_NAMES[$i]}" "" "${LEAD_SIDS[$i]:-}"
   done
   (( ${#RESP_PANES[@]} == 0 )) && break
   echo "reconcile round $round: respawned ${#RESP_PANES[@]} straggler pane(s)" >&2
@@ -309,6 +335,31 @@ for round in 1 2; do
 done
 # Grid settled: restore normal exit behavior so a later crash is visible to health, not retained forever.
 tmux set-option -w -t "$SESSION:roles" remain-on-exit off >/dev/null 2>&1 || true
+
+# Record every launched role's claude session id to a durable manifest so the team can be
+# resumed deterministically after a relogin/crash without reverse-engineering transcripts.
+# One file per workspace, overwritten each launch: $JUMPCODE_HOME/state/sessions/<workspace>.json
+SESSION_DIR="$JUMPCODE_HOME/state/sessions"
+mkdir -p "$SESSION_DIR"
+{
+  printf '%s\t%s\t%s\t%s\n' "orchestrator" "$ORCH" "$ORCH_RUNTIME" "$ORCH_SID"
+  for (( i=0; i<N; i++ )); do
+    printf '%s\t%s\t%s\t%s\n' "${LEAD_ROLES[$i]}" "${LEAD_PANE[$i]:-}" "${LEAD_RUNTIMES[$i]}" "${LEAD_SIDS[$i]:-}"
+  done
+} | WS="$WORKSPACE" SESS="$SESSION" WROOT="$WORKSPACE_ROOT" python3 -c '
+import json, sys, os
+roles = []
+for line in sys.stdin:
+    p = line.rstrip("\n").split("\t")
+    if len(p) < 4 or not p[0]:
+        continue
+    role, pane, rt, sid = p[:4]
+    roles.append({"role": role, "pane": pane, "runtime": rt, "session_id": sid or None})
+out = {"workspace": os.environ["WS"], "session": os.environ["SESS"],
+       "workspace_root": os.environ["WROOT"], "recorded_by": "start-webapp",
+       "roles": sorted(roles, key=lambda r: r["role"])}
+print(json.dumps(out, indent=2))
+' > "$SESSION_DIR/$WORKSPACE.json" && echo "recorded session ids -> $SESSION_DIR/$WORKSPACE.json" >&2 || echo "warn: could not record session ids (grid is up regardless)" >&2
 
 # Open visible iTerm window if available. If Automation permissions block this, tmux still runs.
 if [[ "${JUMPCODE_OPEN_ITERM:-1}" == "1" ]]; then
