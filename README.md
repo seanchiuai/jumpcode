@@ -95,6 +95,57 @@ Topology is hub-and-spoke (ADR 0001): Human may type into any pane (orchestrator
 lead); Hermes talks only to the orchestrator; there is no lead↔lead channel — a lead
 asks the orchestrator to **relay**.
 
+## Creating a workspace: the Goal Contract
+
+A workspace exists to serve **one clearly defined goal with a verifiable final state**.
+The goal is its spine — it pins what the session is for and tailors the orchestrator,
+leads, and specialist agents toward it. Define the goal and gather repo context *before*
+creating: the charters and roster all depend on the mission, so launching a team on a
+vague or wrongly-scoped goal wastes work in the wrong direction.
+
+Resolve every field below before launch. **🔒 = hard gate** — cannot launch until it's
+resolved. The rest are **derived** from the goal, repo, and Linear, and confirmed only
+when genuinely in doubt; if the direction is obvious, set it and move on (don't ask what
+you can safely derive).
+
+**Mission — you must supply:**
+- 🔒 **Goal** — one or two sentences: what this workspace achieves.
+- 🔒 **Final state** — an *observable/verifiable* done-condition (a test passes, a metric
+  hits N, a feature behaves like Y). The implementation may be vague; the end state may not.
+- 🔒 **Scope forks** — for an ambiguous mission, the decisive choice only you can make
+  (port-vs-embed, one-DB-vs-two). Surfaced and asked only when a real fork exists.
+
+**Anchoring context:**
+- 🔒 **Repo** — every workspace is bound to one git repo + a new worktree at
+  `<repo>/.worktrees/<slug>`.
+- **Base branch** — default `staging`; ask only if the repo has none.
+- **System of record** — default **Linear**: attach to an *existing* team + project; ask which
+  existing one if not given. Never auto-create a team or project (and never the personal `SEA`
+  team). A workspace may instead track work as **GitHub issues** (`gh`) — if so, enforce it with a
+  thin orchestrator overlay, since the launcher prompt and central charter assume Linear.
+
+**Derived — confirm only if doubtful:**
+- **Slug** → session `macbook-<slug>`, the worktree path, and the feature branch.
+- **Roster** — the base leads always, plus specialist lead(s) tailored to the goal.
+- **Charters** — specialist + orchestrator, generated from the goal, domain, and final
+  state. The orchestrator's identity and pane title are **`orchestrator · <goal>`**, not a
+  generic workspace name.
+
+**Defaults (overridable):** runtime `claude` for every role; dedicated worktree, husky
+respected, never push `staging`/`main`.
+
+Flow once the contract is resolved: interview only where the goal leaves genuine doubt →
+design → implementation plan → build, run autonomously — don't stop for an obvious fix
+that clearly serves the goal.
+
+**Kickoff — `/goal` (preferred, strongly recommended).** Once the grid is up and the
+orchestrator pane is idle, hand it the mission with the global `/goal <mission>` command
+(`commands/goal.md`, installed to `~/.claude/commands/`). It runs the orchestrator's
+decompose → file-issues → dispatch → integrate → review-gate loop from one mission string,
+checking the charter to know GitHub-vs-Linear. Offer it every time; the freeform alternative
+loses the structured loop. The full procedure lives in the **`creating-jumpcode-workspaces`
+skill** (`skills/creating-jumpcode-workspaces/SKILL.md`).
+
 ## Continuity: always fresh
 
 Launching a workspace always starts clean Claude agents with no session resume (ADR
