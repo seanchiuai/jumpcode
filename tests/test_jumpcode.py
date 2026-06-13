@@ -133,6 +133,91 @@ class DispatchCliTests(unittest.TestCase):
         self.assertIn("orchestrator", out)
         self.assertIn("kickoff", out)
 
+    def test_send_tags_event_with_session(self):
+        # The collision fix: a dispatch's identity is (session, role). --session is the
+        # explicit form (env JUMPCODE_TMUX_SESSION is the implicit one, cleared in tests).
+        sent = json.loads(run_cmd(
+            self.tmp_path, "dispatch", "send",
+            "--from", "orchestrator", "--to", "backend-lead",
+            "--session", "macbook-seo", "--no-wake", "seo work",
+        ).stdout)
+        self.assertEqual(sent["session"], "macbook-seo")
+        logged = read_jsonl(self.tmp_path / ".jumpcode" / "state" / "dispatches.jsonl")
+        self.assertEqual(logged[0]["session"], "macbook-seo")
+
+    def test_send_without_session_logs_untagged_with_warning(self):
+        r = run_cmd(
+            self.tmp_path, "dispatch", "send",
+            "--from", "orchestrator", "--to", "backend-lead", "--no-wake", "x",
+        )
+        self.assertIsNone(json.loads(r.stdout)["session"])
+        self.assertIn("UNTAGGED", r.stderr)
+
+    def test_inbox_is_session_scoped(self):
+        # Same role name in three concurrent workspaces: each session's backend-lead
+        # must see ONLY its own session's traffic — this is the hijack regression test.
+        run_cmd(self.tmp_path, "dispatch", "send", "--from", "orchestrator",
+                "--to", "backend-lead", "--session", "macbook-ambassador",
+                "--no-wake", "BB-63 START NOW")
+        run_cmd(self.tmp_path, "dispatch", "send", "--from", "orchestrator",
+                "--to", "backend-lead", "--session", "macbook-seo",
+                "--no-wake", "MIN-119 seo work")
+        run_cmd(self.tmp_path, "dispatch", "send", "--from", "orchestrator",
+                "--to", "backend-lead", "--no-wake", "legacy untagged")
+
+        seo = json.loads(run_cmd(
+            self.tmp_path, "dispatch", "inbox", "backend-lead",
+            "--session", "macbook-seo", "--json",
+        ).stdout)
+        self.assertEqual([m["body"] for m in seo], ["MIN-119 seo work"])
+
+        # Unscoped (no session resolvable) and --all-sessions both give the global view.
+        everything = json.loads(run_cmd(
+            self.tmp_path, "dispatch", "inbox", "backend-lead",
+            "--all-sessions", "--json",
+        ).stdout)
+        self.assertEqual(len(everything), 3)
+
+    def test_status_open_loop_pairing_is_session_scoped(self):
+        # A report from another session's same-named lead must NOT close this
+        # session's request.
+        req = json.loads(run_cmd(
+            self.tmp_path, "dispatch", "send", "--from", "orchestrator",
+            "--to", "backend-lead", "--task", "MIN-119",
+            "--session", "macbook-seo", "--no-wake", "do seo thing",
+        ).stdout)
+        run_cmd(self.tmp_path, "dispatch", "send", "--from", "backend-lead",
+                "--to", "orchestrator", "--kind", "report-done", "--task", "MIN-119",
+                "--session", "macbook-heatmap", "--no-wake", "done elsewhere")
+
+        seo_status = json.loads(run_cmd(
+            self.tmp_path, "dispatch", "status", "--session", "macbook-seo", "--json",
+        ).stdout)
+        self.assertEqual([r["dispatch_id"] for r in seo_status["open"]],
+                         [req["dispatch_id"]])
+
+        # Same-session report DOES close it.
+        run_cmd(self.tmp_path, "dispatch", "send", "--from", "backend-lead",
+                "--to", "orchestrator", "--kind", "report-done",
+                "--reply-to", req["dispatch_id"],
+                "--session", "macbook-seo", "--no-wake", "done here")
+        seo_status = json.loads(run_cmd(
+            self.tmp_path, "dispatch", "status", "--session", "macbook-seo", "--json",
+        ).stdout)
+        self.assertEqual(seo_status["open"], [])
+
+    def test_log_is_session_scoped(self):
+        run_cmd(self.tmp_path, "dispatch", "send", "--from", "orchestrator",
+                "--to", "qa-lead", "--session", "macbook-seo", "--no-wake", "seo-only-msg")
+        run_cmd(self.tmp_path, "dispatch", "send", "--from", "orchestrator",
+                "--to", "qa-lead", "--session", "macbook-heatmap", "--no-wake", "heatmap-msg")
+        out = run_cmd(self.tmp_path, "dispatch", "log", "--session", "macbook-seo").stdout
+        self.assertIn("seo-only-msg", out)
+        self.assertNotIn("heatmap-msg", out)
+        out_all = run_cmd(self.tmp_path, "dispatch", "log", "--all-sessions").stdout
+        self.assertIn("seo-only-msg", out_all)
+        self.assertIn("heatmap-msg", out_all)
+
     def test_unique_ids_across_sends(self):
         ids = set()
         for i in range(5):

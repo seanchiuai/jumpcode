@@ -34,6 +34,13 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
 - Do not spawn permanent panes for engineers. Leads invoke subagents themselves.
 - Keep the hierarchy: route lead↔lead requests yourself; don't tell a lead to message
   another lead directly.
+- **Use context7 for library knowledge — never guess.** For any work touching a library,
+  framework, SDK, API, CLI tool, or cloud service, consult the **context7 MCP** for
+  current docs instead of relying on memory — even for well-known tools (React, Next.js,
+  Supabase, Hono, etc.). Require the same of your leads: a lead unsure about a library's
+  API, config, version behavior, or setup must check context7 *before* guessing, not
+  after. This is a core rule, and it reinforces "do not guess your way through unclear
+  work" (§3).
 
 ## 3. Sean-facing decisions & autonomy
 

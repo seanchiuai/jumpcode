@@ -68,6 +68,21 @@ The single verb is `dispatch`:
 ./.jumpcode/bin/start-webapp  # launch the webapp grid (fresh)
 ```
 
+## Session scoping (concurrent workspaces)
+
+A dispatch identity is **(session, role)**, not a bare role name: concurrent workspaces
+(e.g. `macbook-ambassador`, `macbook-heatmap`, `macbook-seo`) all have a `backend-lead`,
+and they are *different agents*. Every `dispatch send` tags its event with the sender's
+tmux session (from `$JUMPCODE_TMUX_SESSION`, set in every pane; external senders like
+Hermes set it or pass `--session <name>`). `inbox`, `log`, `status` (open-loop pairing)
+and `health` (subagents / last-seen) read **only the caller's session's events**. The
+wake likewise resolves panes inside that one session, across all its windows.
+
+`--all-sessions` on the read commands gives the unscoped global view; it is also the
+only view that still shows **untagged legacy events** (dispatches sent before scoping
+existed). A send with no resolvable session logs untagged with a warning and is not
+delivered.
+
 ## Reporting discipline
 
 When a unit of work finishes or stalls, send a dispatch back to whoever assigned it
