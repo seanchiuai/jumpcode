@@ -785,6 +785,111 @@ def session_visibility() -> List[Dict[str, Any]]:
     return out
 
 
+def sessions_dir(home: Path) -> Path:
+    """Where launch manifests live — one <workspace>.json per workspace."""
+    return home / "state" / "sessions"
+
+
+def load_manifest(home: Path, workspace: str) -> Optional[Dict[str, Any]]:
+    f = sessions_dir(home) / f"{workspace}.json"
+    if not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def _tmux_session_alive(session: str) -> bool:
+    try:
+        subprocess.run(["tmux", "has-session", "-t", session],
+                       capture_output=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+def _claude_transcript(cwd: str, sid: str) -> Path:
+    """Path to a session's transcript. Claude Code encodes the launch cwd into
+    ~/.claude/projects/<enc> by replacing each '/', '_', '.' with '-'."""
+    enc = re.sub(r"[/_.]", "-", cwd or "")
+    return Path.home() / ".claude" / "projects" / enc / f"{sid}.jsonl"
+
+
+def cmd_revive(args: argparse.Namespace, home: Path) -> int:
+    """Restart or resume a workspace's team from its recorded session manifest.
+
+    `revive <ws>` reopens a workspace RESUMED — each claude role reconnects to the
+    session id recorded at its last launch (state/sessions/<ws>.json), so the panes
+    come back with their prior context instead of fresh (cf. ADR 0004, which keeps
+    bare `start-webapp` fresh; revive is the opt-in resume verb). `--fresh` launches a
+    clean team instead. `revive list` shows every workspace's recorded sessions and
+    whether they're live. The heavy lifting (grid/layout/reconcile/re-record) is reused
+    from start-webapp via JUMPCODE_RESUME; revive only resolves the target and guards
+    against clobbering a running workspace."""
+    if args.workspace == "list":
+        manifests = sorted(sessions_dir(home).glob("*.json"))
+        if not manifests:
+            print(f"no recorded sessions yet (looked in {sessions_dir(home)}).")
+            return 0
+        for f in manifests:
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                print(f"{f.stem}: (unreadable manifest)")
+                continue
+            ws = d.get("workspace", f.stem)
+            session = d.get("session") or f"macbook-{ws}"
+            alive = "live" if _tmux_session_alive(session) else "closed"
+            root = d.get("workspace_root") or ""
+            print(f"\n{ws}  [{alive}]  session={session}  recorded_by={d.get('recorded_by','?')}")
+            for r in d.get("roles", []):
+                role = r.get("role", "?"); sid = r.get("session_id"); rt = r.get("runtime", "?")
+                if not sid:
+                    print(f"  {role:24} (no session id; runtime={rt})")
+                    continue
+                cwd = r.get("cwd") or root
+                ok = "ok " if _claude_transcript(cwd, sid).exists() else "GONE"
+                print(f"  {role:24} {ok} {sid[:8]}  ({rt})")
+        return 0
+
+    workspace = args.workspace
+    manifest = load_manifest(home, workspace)
+    session = (manifest or {}).get("session") or f"macbook-{workspace}"
+
+    if not args.fresh and manifest is None:
+        print(f"revive: no recorded sessions for '{workspace}' "
+              f"({sessions_dir(home) / (workspace + '.json')} not found).\n"
+              f"Nothing to resume — use `revive {workspace} --fresh` to launch a clean team.",
+              file=sys.stderr)
+        return 1
+
+    if _tmux_session_alive(session) and not args.force:
+        print(f"revive: '{workspace}' is already running (tmux session '{session}').\n"
+              f"  It's open — attach with:  tmux attach -t {session}\n"
+              f"  To kill it and relaunch anyway, re-run with --force.", file=sys.stderr)
+        return 2
+
+    start = home / "bin" / "start-webapp"
+    if not start.exists():
+        print(f"revive: launcher not found at {start}.", file=sys.stderr)
+        return 1
+
+    env = os.environ.copy()
+    env["JUMPCODE_HOME"] = str(home)
+    env["JUMPCODE_WORKSPACE"] = workspace
+    env["JUMPCODE_TMUX_SESSION"] = session
+    if args.fresh:
+        env.pop("JUMPCODE_RESUME", None)
+        print(f"revive: launching '{workspace}' FRESH (clean sessions) -> {session}", file=sys.stderr)
+    else:
+        env["JUMPCODE_RESUME"] = "1"
+        n = len([r for r in manifest.get("roles", []) if r.get("session_id")])
+        print(f"revive: resuming '{workspace}' ({n} recorded session id(s)) -> {session}", file=sys.stderr)
+    os.execve(str(start), [str(start)], env)
+    return 0  # unreachable after execve
+
+
 def cmd_health(args: argparse.Namespace, home: Path) -> int:
     session = getattr(args, "session", None) or resolve_session()
     # Dispatch-derived fields (subagents, last spoke/addressed, silent) are scoped to
@@ -958,6 +1063,11 @@ def build_parser() -> argparse.ArgumentParser:
     peek.add_argument("role")
     peek.add_argument("lines", nargs="?", type=int, default=50)
 
+    revive = sub.add_parser("revive", help="reopen a workspace RESUMED from its recorded sessions (or 'list')")
+    revive.add_argument("workspace", help="workspace to revive, or 'list' to show recorded sessions")
+    revive.add_argument("--fresh", action="store_true", help="launch clean sessions instead of resuming")
+    revive.add_argument("--force", action="store_true", help="kill+relaunch even if the workspace is already running")
+
     return parser
 
 
@@ -974,6 +1084,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_health(args, home)
     if args.cmd == "peek":
         return cmd_peek(args, home)
+    if args.cmd == "revive":
+        return cmd_revive(args, home)
     parser.error("unknown command")
     return 2
 

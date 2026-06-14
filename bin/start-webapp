@@ -26,6 +26,13 @@ CODEX_BIN="${CODEX_BIN:-/Applications/Codex.app/Contents/Resources/codex}"
 CLAUDE_ARGS="${CLAUDE_ARGS:-}"
 CODEX_ARGS="${CODEX_ARGS:---yolo}"
 KILL_EXISTING="${JUMPCODE_KILL_EXISTING:-1}"
+# Resume mode (opt-in; bare start-webapp stays fresh per ADR 0004). When set, every claude
+# role reuses its recorded session id from the prior launch manifest and is launched on the
+# RESUME path instead of being assigned a brand-new id. Roles with no recorded id (a role
+# added since the last launch, codex, or a never-recorded workspace) fall back to fresh.
+# The `revive` bin is the user-facing verb that turns this on.
+RESUME_MODE="${JUMPCODE_RESUME:-0}"
+RESUME_FLAG=""; [[ "$RESUME_MODE" == "1" ]] && RESUME_FLAG="resume"
 
 # Runtime registry (inline, data-shaped — borrow Claude Squad's "profile" idea without a
 # new config file). Maps a runtime name to the program that fills a pane. Add a third
@@ -176,18 +183,38 @@ done
 # id (different session model). Generated up front so the same id is used at launch and on
 # any reconcile/respawn below.
 gen_sid() { uuidgen | tr 'A-Z' 'a-z'; }
+# Resume mode: load the prior launch manifest into a role->sid map so each role reuses its
+# own recorded session id. Role discovery (above) stays the source of truth for WHO runs;
+# the manifest only supplies the id for WHOM — a role added/removed since last launch is
+# handled by discovery, and a role with no recorded id just gets a fresh one below.
+declare -A RECORDED_SID=()
+PRIOR_MANIFEST="$JUMPCODE_HOME/state/sessions/$WORKSPACE.json"
+if [[ "$RESUME_MODE" == "1" && -f "$PRIOR_MANIFEST" ]]; then
+  while IFS=$'\t' read -r _role _sid; do
+    [[ -n "$_role" && -n "$_sid" ]] && RECORDED_SID["$_role"]="$_sid"
+  done < <(python3 -c 'import json,sys
+for r in json.load(open(sys.argv[1])).get("roles",[]):
+    if r.get("session_id"): print("%s\t%s" % (r["role"], r["session_id"]))' "$PRIOR_MANIFEST")
+  echo "resume mode: ${#RECORDED_SID[@]} recorded session id(s) loaded from $PRIOR_MANIFEST" >&2
+elif [[ "$RESUME_MODE" == "1" ]]; then
+  echo "resume mode: no prior manifest at $PRIOR_MANIFEST — launching fresh" >&2
+fi
+# Pick a session id for a role: its recorded id in resume mode, else a fresh one.
+pick_sid() {  # role
+  if [[ "$RESUME_MODE" == "1" && -n "${RECORDED_SID[$1]:-}" ]]; then printf '%s' "${RECORDED_SID[$1]}"; else gen_sid; fi
+}
 ORCH_SID=""
-[[ "$ORCH_RUNTIME" == "claude" ]] && ORCH_SID="$(gen_sid)"
+[[ "$ORCH_RUNTIME" == "claude" ]] && ORCH_SID="$(pick_sid orchestrator)"
 LEAD_SIDS=()
 for (( i=0; i<${#LEAD_ROLES[@]}; i++ )); do
-  if [[ "${LEAD_RUNTIMES[$i]}" == "claude" ]]; then LEAD_SIDS[$i]="$(gen_sid)"; else LEAD_SIDS[$i]=""; fi
+  if [[ "${LEAD_RUNTIMES[$i]}" == "claude" ]]; then LEAD_SIDS[$i]="$(pick_sid "${LEAD_ROLES[$i]}")"; else LEAD_SIDS[$i]=""; fi
 done
 
 # Orchestrator pane: the fixed right column.
 # Create at a generous virtual size so a tall left column of leads has room to split;
 # tmux resizes to the client when one attaches. (A tiny default size makes split-window
 # fail once there are several leads.)
-ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${JUMPCODE_COLS:-260}" -y "${JUMPCODE_ROWS:-72}" -s "$SESSION" -n roles -c "$WORKSPACE_ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME" "$ORCH_SID")")
+ORCH=$(tmux new-session -d -P -F '#{pane_id}' -x "${JUMPCODE_COLS:-260}" -y "${JUMPCODE_ROWS:-72}" -s "$SESSION" -n roles -c "$WORKSPACE_ROOT" "$(agent_cmd orchestrator "$ORCH_PROMPT" "$ORCH_RUNTIME" "$ORCH_SID" "$RESUME_FLAG")")
 
 # Keep panes that exit during the startup window REVIVABLE rather than letting tmux drop
 # them (a dropped pane collapses the grid and loses a role). codex's TUI occasionally
@@ -211,7 +238,7 @@ if (( N > 0 )); then NCOLS=$(( (N + MAX_PER_COL - 1) / MAX_PER_COL )); fi
 for (( c=0; c<NCOLS; c++ )); do
   idx=$(( c * MAX_PER_COL ))
   head=$(tmux split-window -P -F '#{pane_id}' -t "$ORCH" -h -b -c "$WORKSPACE_ROOT" \
-           "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}" "${LEAD_SIDS[$idx]:-}")") \
+           "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}" "${LEAD_SIDS[$idx]:-}" "$RESUME_FLAG")") \
     || { echo "warn: no room for lead column $c — raise JUMPCODE_COLS" >&2; continue; }
   LEAD_PANE[$idx]=$head
   COL_HEADS[$c]=$head
@@ -225,7 +252,7 @@ for (( c=0; c<NCOLS; c++ )); do
     idx=$(( c * MAX_PER_COL + r ))
     if (( idx >= N )); then break; fi
     pane=$(tmux split-window -P -F '#{pane_id}' -t "$prev" -v -c "$WORKSPACE_ROOT" \
-             "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}" "${LEAD_SIDS[$idx]:-}")") \
+             "$(agent_cmd "${LEAD_ROLES[$idx]}" "${LEAD_PROMPTS[$idx]}" "${LEAD_RUNTIMES[$idx]}" "${LEAD_SIDS[$idx]:-}" "$RESUME_FLAG")") \
       || { echo "warn: no room for lead '${LEAD_ROLES[$idx]}' — raise JUMPCODE_ROWS" >&2; continue; }
     LEAD_PANE[$idx]=$pane
     prev=$pane
@@ -356,7 +383,7 @@ mkdir -p "$SESSION_DIR" 2>/dev/null || true   # never abort the launch on a reco
   for (( i=0; i<N; i++ )); do
     printf '%s\t%s\t%s\t%s\n' "${LEAD_ROLES[$i]}" "${LEAD_PANE[$i]:-}" "${LEAD_RUNTIMES[$i]}" "${LEAD_SIDS[$i]:-}"
   done
-} | WS="$WORKSPACE" SESS="$SESSION" WROOT="$WORKSPACE_ROOT" python3 -c '
+} | WS="$WORKSPACE" SESS="$SESSION" WROOT="$WORKSPACE_ROOT" RECBY="$([[ "$RESUME_MODE" == "1" ]] && echo start-webapp-resume || echo start-webapp)" python3 -c '
 import json, sys, os
 roles = []
 for line in sys.stdin:
@@ -368,7 +395,7 @@ for line in sys.stdin:
     # rather than a uuid that was assigned but never passed to `claude --session-id`.
     roles.append({"role": role, "pane": pane, "runtime": rt, "session_id": (sid or None) if pane else None})
 out = {"workspace": os.environ["WS"], "session": os.environ["SESS"],
-       "workspace_root": os.environ["WROOT"], "recorded_by": "start-webapp",
+       "workspace_root": os.environ["WROOT"], "recorded_by": os.environ.get("RECBY", "start-webapp"),
        "roles": sorted(roles, key=lambda r: r["role"])}
 print(json.dumps(out, indent=2))
 ' > "$SESSION_DIR/$WORKSPACE.json" && echo "recorded session ids -> $SESSION_DIR/$WORKSPACE.json" >&2 || echo "warn: could not record session ids (grid is up regardless)" >&2

@@ -111,8 +111,22 @@ another lead. Neither Human nor Hermes addresses subagents directly.
 
 ## Continuity
 
-Panes launch fresh with no session resume (ADR 0004). Reconstruct context from Linear
+Bare `start-webapp` launches panes **fresh** (ADR 0004) — reconstruct context from Linear
 and the dispatch log (`./.jumpcode/bin/dispatch log 40`).
+
+To reopen a workspace **resumed** instead (each role reconnecting to its prior session),
+use `revive` (ADR 0005):
+
+```bash
+./.jumpcode/bin/revive <ws>          # reopen RESUMED from state/sessions/<ws>.json
+./.jumpcode/bin/revive <ws> --fresh  # clean restart (new sessions)
+./.jumpcode/bin/revive <ws> --force  # kill+relaunch even if it's already running
+./.jumpcode/bin/revive list          # recorded sessions per workspace + live/closed
+```
+
+`revive` refuses to clobber a running workspace without `--force`. Session ids are recorded
+to `state/sessions/<ws>.json` on every launch; the resume launch re-records them, so relogin
+recovery is just `revive <ws>`.
 
 ## Testing after changes
 
