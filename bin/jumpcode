@@ -2,7 +2,7 @@
 """Local dispatch CLI for the MacBook jumpcode.
 
 The jumpcode owns only the *delivery* layer: visible panes, live wake, and a durable
-dispatch log. Projects and tasks live in Linear (ADR 0003), not here. A single verb,
+dispatch log. Projects and tasks live in GitHub issues (ADR 0006), not here. A single verb,
 `dispatch`, both wakes the recipient's pane and appends to the append-only log under
 .jumpcode/state/.
 """
@@ -251,6 +251,44 @@ def wake_pane(session: str, role: str, text: str) -> bool:
         subprocess.run(["tmux", "send-keys", "-t", pane, "C-u"], check=False)  # drop failed attempt
         time.sleep(0.3)
     return False
+
+
+def recompact_pane(session: str, role: str) -> bool:
+    """Type /compact into a role's pane so it compacts on the orchestrator's command.
+
+    A Claude pane cannot self-/compact (it is a user keystroke), so the orchestrator drives a
+    lead's compaction through here. No follow-up message is queued: the SessionStart(compact)
+    rehydrate hook restores the lead's identity/protocol and (for leads) makes it announce it
+    is back, so the orchestrator needs nothing more than the keystroke. Returns True if the
+    role's pane was resolved and the keys were sent.
+    """
+    if not session:
+        return False
+    try:
+        out = subprocess.run(
+            ["tmux", "list-panes", "-s", "-t", session, "-F", "#{pane_id}\t#{@jumpcode_role}"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+    pane = resolve_pane(out, role)
+    if not pane:
+        return False
+    subprocess.run(["tmux", "send-keys", "-t", pane, "Escape"], check=False)  # close any menu
+    subprocess.run(["tmux", "send-keys", "-t", pane, "C-u"], check=False)     # clear stale input
+    subprocess.run(["tmux", "send-keys", "-t", pane, "--", "/compact"], check=False)
+    subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"], check=False)
+    return True
+
+
+def cmd_recompact(args: argparse.Namespace, home: Path) -> int:
+    session = resolve_session()
+    if recompact_pane(session, args.role):
+        print(f"sent /compact to {args.role}")
+        return 0
+    print(f"recompact: could not resolve pane for role '{args.role}' in session '{session}'",
+          file=sys.stderr)
+    return 1
 
 
 def resolve_session() -> str:
@@ -890,6 +928,41 @@ def cmd_revive(args: argparse.Namespace, home: Path) -> int:
     return 0  # unreachable after execve
 
 
+def scan_session(session: str, subs: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+    """Live pane scan for one tmux session — the shared core of `health` and `fleet`.
+
+    Returns one dict per pane with role, pane id, liveness, runtime, classified
+    `state` (working|waiting|idle|stopped via pane_state), and subagents. `subs` is
+    the active-subagents map from active_subagents(); pass {} if not needed. Returns
+    [] when the session has no panes or tmux is unavailable.
+    """
+    try:
+        panes_text = subprocess.run(
+            ["tmux", "list-panes", "-s", "-t", session, "-F",
+             "#{pane_id}\t#{@jumpcode_role}\t#{pane_current_command}\t#{pane_dead}\t#{@jumpcode_runtime}"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+    agents: List[Dict[str, Any]] = []
+    for line in panes_text.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 4:
+            continue
+        pane_id, role, cmd, dead = parts[0], parts[1].strip(), parts[2], parts[3]
+        runtime = parts[4].strip() if len(parts) >= 5 else ""
+        if not role:
+            continue
+        alive = dead != "1"
+        state = "stopped" if not alive else pane_state(_tmux_capture(pane_id), runtime or "claude")
+        agents.append({
+            "role": role, "pane": pane_id, "alive": alive, "command": cmd,
+            "runtime": runtime or "claude",
+            "state": state, "subagents": subs.get(role, []),
+        })
+    return agents
+
+
 def cmd_health(args: argparse.Namespace, home: Path) -> int:
     session = getattr(args, "session", None) or resolve_session()
     # Dispatch-derived fields (subagents, last spoke/addressed, silent) are scoped to
@@ -912,36 +985,12 @@ def cmd_health(args: argparse.Namespace, home: Path) -> int:
             "silent": silent,
         }
 
-    panes_text = ""
-    if session:
-        try:
-            panes_text = subprocess.run(
-                ["tmux", "list-panes", "-s", "-t", session, "-F",
-                 "#{pane_id}\t#{@jumpcode_role}\t#{pane_current_command}\t#{pane_dead}\t#{@jumpcode_runtime}"],
-                capture_output=True, text=True, check=True,
-            ).stdout
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            panes_text = ""
-
     agents: List[Dict[str, Any]] = []
     seen_roles = set()
-    for line in panes_text.splitlines():
-        parts = line.split("\t")
-        if len(parts) < 4:
-            continue
-        pane_id, role, cmd, dead = parts[0], parts[1].strip(), parts[2], parts[3]
-        runtime = parts[4].strip() if len(parts) >= 5 else ""
-        if not role:
-            continue
-        seen_roles.add(role)
-        alive = dead != "1"
-        state = "stopped" if not alive else pane_state(_tmux_capture(pane_id), runtime or "claude")
-        agents.append({
-            "role": role, "pane": pane_id, "alive": alive, "command": cmd,
-            "runtime": runtime or "claude",
-            "state": state, "subagents": subs.get(role, []),
-            **_seen_fields(role),
-        })
+    if session:
+        for a in scan_session(session, subs):
+            seen_roles.add(a["role"])
+            agents.append({**a, **_seen_fields(a["role"])})
 
     # Roles that have appeared in the dispatch log but have no live pane right now.
     for role in sorted(r for r in seen if r not in seen_roles
@@ -1001,7 +1050,7 @@ def cmd_health(args: argparse.Namespace, home: Path) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="jumpcode", description="Local dispatch CLI (Linear owns projects/tasks)"
+        prog="jumpcode", description="Local dispatch CLI (GitHub issues own projects/tasks)"
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -1063,6 +1112,9 @@ def build_parser() -> argparse.ArgumentParser:
     peek.add_argument("role")
     peek.add_argument("lines", nargs="?", type=int, default=50)
 
+    recompact = sub.add_parser("recompact", help="type /compact into a role's pane (orchestrator-driven)")
+    recompact.add_argument("--role", required=True, help="role whose pane should compact")
+
     revive = sub.add_parser("revive", help="reopen a workspace RESUMED from its recorded sessions (or 'list')")
     revive.add_argument("workspace", help="workspace to revive, or 'list' to show recorded sessions")
     revive.add_argument("--fresh", action="store_true", help="launch clean sessions instead of resuming")
@@ -1084,6 +1136,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_health(args, home)
     if args.cmd == "peek":
         return cmd_peek(args, home)
+    if args.cmd == "recompact":
+        return cmd_recompact(args, home)
     if args.cmd == "revive":
         return cmd_revive(args, home)
     parser.error("unknown command")
