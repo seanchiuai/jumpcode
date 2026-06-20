@@ -19,7 +19,11 @@ Run your standard operating loop to deliver it. Do not implement it yourself —
 3. **Create tracking issues.** Open one issue per workstream in **this workspace's system of
    record** — by default GitHub issues (`gh issue create`), unless your charter/overrides name a
    different tracker. Never invent or auto-create a repo; file in the workspace's own repo. If the
-   target repo is not specified, ask Sean which repo before filing.
+   target repo is not specified, ask Sean which repo before filing. **Every issue must carry a
+   concrete `## Acceptance criteria` section** — a short checklist of observable, checkable
+   conditions that define "done" for that workstream (the same contract the `to-issues` skill
+   mandates). A workstream whose done-condition you cannot make concrete is not ready to dispatch:
+   sharpen it, or take it back to Sean.
 
 4. **Dispatch the right leads.** For each workstream, wake its owner:
    `$JUMPCODE_HOME/bin/dispatch send --from orchestrator --to <lead> [--task <ISSUE-REF>] BODY`.

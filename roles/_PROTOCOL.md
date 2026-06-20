@@ -16,7 +16,9 @@ role files only add what is specific to a role. Canonical terms live in
   with the `gh` CLI. There is **no local task registry** — do not look for `task`,
   `run`, or `status` registries; they were retired (ADR 0006).
 - "Done" is informal: update the GitHub issue and report via dispatch. There is no
-  machine "completion" gate.
+  machine "completion" gate — so the discipline is on you: confirm the acceptance
+  criteria *before* you build (see "Confirm the target before building") and report your
+  result against them.
 
 ## Which repo an issue belongs to
 
@@ -57,6 +59,23 @@ $JUMPCODE_HOME/bin/dispatch show <dispatch-id>     # one message in full
 You cannot poll your own inbox unprompted — you act when woken. After finishing a
 unit of work, **always send a report dispatch** so the sender knows; do not assume a
 chat message alone counts.
+
+### Confirm the target before building
+
+Before you start work on a `request`, state — in one line back to the sender, or in the
+GitHub issue — the **acceptance criteria** you will treat as "done": the observable
+condition that, once true, means this task is complete. Pull it from the issue
+(`gh issue view`) or from the dispatch body.
+
+If you cannot find or derive clear, checkable criteria, **do not start building** — send a
+`reply` (or `report-blocked`) asking the sender to make "done" concrete first. A lead asks
+the orchestrator; the orchestrator asks Sean. Declaring the target up front is cheaper than
+discovering at report-time that you built to the wrong one.
+
+This is the shared form of the orchestrator's **"do not guess your way through unclear
+work"** rule — it binds **every role**. If the intended behavior, scope, or done-condition
+is unclear, resolve it before writing code; never make a speculative choice and call it
+done. When you report, report your result *against* the criteria you confirmed here.
 
 ### Reporting
 
