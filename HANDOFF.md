@@ -4,7 +4,7 @@
 
 A minimal local orchestration system for `workspace-macbook`. It owns only the delivery
 layer — visible panes, live wake, and a durable dispatch log. Projects and tasks live in
-Linear. See [`CONTEXT.md`](CONTEXT.md) for canonical terms and [`docs/adr/`](docs/adr/)
+GitHub issues. See [`CONTEXT.md`](CONTEXT.md) for canonical terms and [`docs/adr/`](docs/adr/)
 for the decisions.
 
 ## Core primitive
@@ -73,7 +73,7 @@ overwrites the visible pane title, so wake targeting never relies on it.
 
 ## Important design decisions
 
-- Projects and tasks live in **Linear** (ADR 0003); no local task/run/project registry.
+- Projects and tasks live in **GitHub issues** (ADR 0006, superseding ADR 0003); no local task/run/project registry.
 - A **dispatch** unifies live wake + durable log (ADR 0002), replacing the old mailbox.
 - Topology is hub-and-spoke with the orchestrator as hub (ADR 0001).
 - Workspaces always launch **fresh** — no session resume (ADR 0004).
