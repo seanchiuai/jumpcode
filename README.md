@@ -141,7 +141,8 @@ that clearly serves the goal.
 
 **Kickoff — `/goal` (preferred, strongly recommended).** Once the grid is up and the
 orchestrator pane is idle, hand it the mission with the global `/goal <mission>` command
-(`commands/goal.md`, installed to `~/.claude/commands/`). It runs the orchestrator's
+(`~/.claude/commands/goal.md`, a user-global Claude Code command — not shipped by this repo).
+It runs the orchestrator's
 decompose → file-issues → dispatch → integrate → review-gate loop from one mission string,
 checking the charter to know which tracker is in use. Offer it every time; the freeform alternative
 loses the structured loop. The full procedure lives in the **`creating-jumpcode-workspaces`

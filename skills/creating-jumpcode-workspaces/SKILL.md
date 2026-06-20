@@ -118,15 +118,16 @@ Create a TodoWrite item per step and do them in order.
 
 ## The /goal kickoff
 
-`/goal <mission>` is a global Claude command (`~/.claude/commands/goal.md`; canonical copy shipped
-at `$JUMPCODE_HOME/commands/goal.md`). Typed into an orchestrator pane, it runs the orchestrator's
+`/goal <mission>` is a user-global Claude Code command (`~/.claude/commands/goal.md`) — it is **not**
+shipped by this repo. Typed into an orchestrator pane, it runs the orchestrator's
 operating loop: confirm roster via `health`, restate + decompose the mission, file one tracking
 issue per workstream in the workspace's system of record (it checks the charter to know which
 tracker is in use), dispatch the right leads, integrate + enforce the review gate, report to the human.
 
-Ensure it is installed before launch:
+Ensure it exists before launch (install/maintain it yourself in `~/.claude/commands/`; this repo no
+longer ships a copy):
 ```bash
-[ -f ~/.claude/commands/goal.md ] || cp "$JUMPCODE_HOME/commands/goal.md" ~/.claude/commands/goal.md
+[ -f ~/.claude/commands/goal.md ] || echo "WARN: /goal not installed — add it at ~/.claude/commands/goal.md"
 ```
 
 This is the **preferred and strongly recommended** way to start a workspace's orchestrator —
