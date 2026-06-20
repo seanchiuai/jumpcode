@@ -2,6 +2,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -102,6 +103,42 @@ class ConfigCheckTests(unittest.TestCase):
                         "roles": [{"role": "backend-lead", "cwd": "/no/such/dir"}]}
             # even if workspace.json existed, a vanished cwd fails the check
             self.assertFalse(jumpcode.workspace_config_ok(home, "x", manifest))
+
+
+def _ago(secs):
+    t = datetime.now(timezone.utc) - timedelta(seconds=secs)
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _sent(frm, to, ts):
+    return {"type": "dispatch.sent", "from": frm, "to": to, "created_at": ts}
+
+
+class SilentLoopTests(unittest.TestCase):
+    def test_woken_recently_no_reply_overdue_counts(self):
+        # backend-lead woken 20 min ago, never spoke -> overdue & recent -> 1
+        disp = [_sent("orchestrator", "backend-lead", _ago(1200))]
+        self.assertEqual(jumpcode.fleet_silent_loops(disp), 1)
+
+    def test_replied_after_being_woken_does_not_count(self):
+        # backend-lead woken, then replied; orchestrator speaks last so it isn't
+        # itself left looking silent by the reply addressing it.
+        disp = [_sent("orchestrator", "backend-lead", _ago(1200)),
+                _sent("backend-lead", "orchestrator", _ago(700)),
+                _sent("orchestrator", "backend-lead", _ago(100))]
+        # backend's latest wake (100s ago) is recent but not overdue; orchestrator
+        # spoke most recently -> neither is a stale silent loop.
+        self.assertEqual(jumpcode.fleet_silent_loops(disp), 0)
+
+    def test_ancient_silent_loop_does_not_count(self):
+        # woken 7 days ago, never replied -> too old to be a live error -> 0
+        disp = [_sent("orchestrator", "backend-lead", _ago(7 * 86400))]
+        self.assertEqual(jumpcode.fleet_silent_loops(disp), 0)
+
+    def test_just_woken_not_yet_overdue_does_not_count(self):
+        # woken 2 min ago -> not overdue yet -> 0
+        disp = [_sent("orchestrator", "backend-lead", _ago(120))]
+        self.assertEqual(jumpcode.fleet_silent_loops(disp), 0)
 
 
 if __name__ == "__main__":
