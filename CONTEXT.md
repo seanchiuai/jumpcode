@@ -1,19 +1,19 @@
 # Jumpcode
 
-The local, file-based multi-agent orchestration system for `workspace-macbook`. Human + Hermes drive a workspace's orchestrator, which commands its team leads, which invoke general subagents as tools. Projects and tasks live in Linear; the jumpcode owns the visible panes, dispatch delivery, the dispatch log, and workspace config.
+The local, file-based multi-agent orchestration system for `workspace-macbook`. Human + Hermes drive a workspace's orchestrator, which commands its team leads, which invoke general subagents as tools. Projects and tasks live in GitHub issues; the jumpcode owns the visible panes, dispatch delivery, the dispatch log, and workspace config.
 
 ## Language
 
 **Project**:
-A collection of tasks sharing one goal (e.g. "set up MCP"), tracked as a **Linear project**. A workspace can have several active at once; its orchestrator interleaves them. The jumpcode does **not** maintain its own project registry — Linear is the system of record (see ADR 0003).
+A collection of tasks sharing one goal (e.g. "set up MCP"), tracked as a **GitHub repo/milestone**. A workspace can have several active at once; its orchestrator interleaves them. The jumpcode does **not** maintain its own project registry — GitHub issues are the system of record (see ADR 0006).
 _Avoid_: run, registry
 
 **Task**:
-A unit of work — a **Linear issue**. Lives in Linear, not the jumpcode. The orchestrator (and Hermes) read/write it via Linear.
+A unit of work — a **GitHub issue**. Lives in GitHub, not the jumpcode. The orchestrator (and Hermes) read/write it via the `gh` CLI.
 _Avoid_: ticket
 
 **Workspace**:
-A named, saved, reusable configuration bound to a repo — one orchestrator plus multiple team leads and their prompts/agent config. A repo can hold multiple workspaces, but in practice usually one; concurrency lives at the project level (one workspace's orchestrator can work several projects at once), not the workspace level. There are no templates: you create a new workspace from scratch or by copying an existing one. The workspace *is* the saved config; launching it brings it to life as visible panes — there is no separate noun for the running instance. Launching always starts **fresh**: clean Claude agents with the same config, no session resume. Closing a workspace closes the window; the saved config persists. Agents orient from Linear + the dispatch log, never from prior agent memory. A workspace does **not** bind to a Linear project: the orchestrator has general Linear access and is told which project each task belongs to. Created fresh or by copying an existing workspace (no templates).
+A named, saved, reusable configuration bound to a repo — one orchestrator plus multiple team leads and their prompts/agent config. A repo can hold multiple workspaces, but in practice usually one; concurrency lives at the project level (one workspace's orchestrator can work several projects at once), not the workspace level. There are no templates: you create a new workspace from scratch or by copying an existing one. The workspace *is* the saved config; launching it brings it to life as visible panes — there is no separate noun for the running instance. Launching always starts **fresh**: clean Claude agents with the same config, no session resume. Closing a workspace closes the window; the saved config persists. Agents orient from GitHub issues + the dispatch log, never from prior agent memory. A workspace does **not** bind to a single repo as its tracker: the orchestrator has general `gh` access and is told which repo each task belongs to. Created fresh or by copying an existing workspace (no templates).
 _Avoid_: project, session, template, instance
 
 **Repo**:

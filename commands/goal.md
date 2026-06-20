@@ -17,9 +17,9 @@ Run your standard operating loop to deliver it. Do not implement it yourself —
    investigation before building (assign those as their own scouting workstreams).
 
 3. **Create tracking issues.** Open one issue per workstream in **this workspace's system of
-   record** — check your charter/overrides for whether that is GitHub issues (`gh issue create`)
-   or Linear (Linear MCP). Never use the personal `Sean Chiu`/SEA Linear team. If neither is
-   specified and Linear is the default, ask Sean which existing team/project before filing.
+   record** — by default GitHub issues (`gh issue create`), unless your charter/overrides name a
+   different tracker. Never invent or auto-create a repo; file in the workspace's own repo. If the
+   target repo is not specified, ask Sean which repo before filing.
 
 4. **Dispatch the right leads.** For each workstream, wake its owner:
    `$JUMPCODE_HOME/bin/dispatch send --from orchestrator --to <lead> [--task <ISSUE-REF>] BODY`.

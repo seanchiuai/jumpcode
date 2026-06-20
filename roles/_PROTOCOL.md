@@ -7,29 +7,25 @@ role files only add what is specific to a role. Canonical terms live in
 ## The one mental model
 
 > Human + Hermes drive the **orchestrator**, which commands its **team leads**, which
-> invoke general **subagents** as a tool. **Projects and tasks live in Linear.** The
+> invoke general **subagents** as a tool. **Projects and tasks live in GitHub issues.** The
 > jumpcode only moves messages between visible panes and remembers what was said.
 
-## Where work lives: Linear, not here
+## Where work lives: GitHub issues, not here
 
-- A **project** is a Linear project; a **task** is a Linear issue. Read and update them
-  with the Linear MCP. There is **no local task registry** — do not look for `task`,
-  `run`, or `status` registries; they were retired (ADR 0003).
-- "Done" is informal: update the Linear issue and report via dispatch. There is no
+- A **project** is a GitHub repo/milestone; a **task** is a GitHub issue. Read and update them
+  with the `gh` CLI. There is **no local task registry** — do not look for `task`,
+  `run`, or `status` registries; they were retired (ADR 0006).
+- "Done" is informal: update the GitHub issue and report via dispatch. There is no
   machine "completion" gate.
 
-## Which Linear team an issue belongs to
+## Which repo an issue belongs to
 
-- **Never create a Linear team.** The Linear MCP has no team-creation tool, and you must
-  not improvise one — issues and projects attach to **existing** teams only.
-- **Never use Sean's personal team** `Sean Chiu` (key `SEA`,
-  id `a0a23983-bb30-4874-89c6-1df0bd2d1e99`) for jumpcode work. It is his account's
-  default/onboarding team, not a work bucket.
-- The team (or project) for a task is **specified by the Human/orchestrator** — normally
-  via the dispatch's `--project <LINEAR-PROJECT>` / `--task <LINEAR-ISSUE>`. If you need to
-  create an issue and **no team or project is specified, STOP and ask** (a lead asks the
-  orchestrator; the orchestrator asks Sean). Do **not** fall back to a personal or default
-  team.
+- **Never invent or auto-create a repo.** Issues are filed in **existing** repos only —
+  the workspace's own repo.
+- The repo for a task is **specified by the Human/orchestrator** — normally
+  via the dispatch's `--project <owner/repo>` / `--task #NN`. If you need to
+  create an issue and **no repo is specified, STOP and ask** (a lead asks the
+  orchestrator; the orchestrator asks Sean). Do **not** guess a repo.
 
 ## Dispatch: the only channel
 
@@ -40,7 +36,7 @@ A **dispatch** is one directed message that does two things at once (ADR 0002): 
 ```bash
 $JUMPCODE_HOME/bin/dispatch send \
   --from <your-role> --to <recipient-role> \
-  [--project <LINEAR-PROJECT>] [--task <LINEAR-ISSUE>] \
+  [--project <owner/repo>] [--task #NN] \
   [--subject "<short subject>"] \
   [--kind request|reply|report-done|report-blocked|notice] \
   "<body>"
@@ -65,7 +61,7 @@ chat message alone counts.
 ### Reporting
 
 When a task is done or stuck, send a dispatch back to whoever assigned it **and**
-update the Linear issue. **Always pass `--reply-to <the request's dispatch-id>`** (the id
+update the GitHub issue. **Always pass `--reply-to <the request's dispatch-id>`** (the id
 shown when the request was sent / in `dispatch inbox`): it is what lets `dispatch status`
 pair your report to its request precisely and close the open loop. Without it, status
 falls back to matching by `--task`, which can't tell two open requests on the same issue
@@ -74,12 +70,12 @@ apart.
 ```bash
 # done
 $JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator \
-  --kind report-done --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> \
+  --kind report-done --task #NN --reply-to <REQUEST-DISPATCH-ID> \
   "Summary; what changed; checks run; open concerns; recommended next step."
 
 # blocked
 $JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator \
-  --kind report-blocked --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> \
+  --kind report-blocked --task #NN --reply-to <REQUEST-DISPATCH-ID> \
   "Blocker; why; what you tried; what you need from the orchestrator."
 ```
 
@@ -101,7 +97,7 @@ team lead    -> its own subagents (a tool, not a pane)
 
 Panes launch as clean Claude agents with no session resume. When a workspace reopens,
 you have **no memory** of the prior session. Reconstruct context from the durable
-sources: **Linear** (what the work is) and the **dispatch log** (what was said):
+sources: **GitHub issues** (what the work is) and the **dispatch log** (what was said):
 
 ```bash
 $JUMPCODE_HOME/bin/dispatch log 40
@@ -145,10 +141,10 @@ Leads behave identically regardless of which runtime fills their pane (set per r
 - **Subagents are optional.** A Codex lead may not spawn subagents the way Claude Code
   does. The `subagent:start`/`subagent:end` self-report convention is advisory — absence
   of subagents is normal, not an error.
-- **Linear access depends on the runtime's MCP.** Linear is the system of record. A Codex
-  lead can only read/update Linear if `~/.codex/config.toml` has a `[mcp_servers.linear]`
-  entry. If yours does not, report progress via `dispatch` and let the orchestrator make
-  the Linear writes.
+- **GitHub access depends on the `gh` CLI.** GitHub issues are the system of record. A Codex
+  lead can only read/update issues if the `gh` CLI is authenticated in its environment.
+  If yours is not, report progress via `dispatch` and let the orchestrator make
+  the GitHub writes.
 
 ## Guardrails are soft (v1)
 

@@ -49,12 +49,12 @@ class DispatchCliTests(unittest.TestCase):
         sent = json.loads(run_cmd(
             self.tmp_path, "dispatch", "send",
             "--from", "orchestrator", "--to", "backend-lead",
-            "--task", "ENG-12", "--subject", "Build auth", "--no-wake",
+            "--task", "#12", "--subject", "Build auth", "--no-wake",
             "Implement the auth endpoints.",
         ).stdout)
         self.assertEqual(sent["type"], "dispatch.sent")
         self.assertTrue(sent["dispatch_id"].startswith("dsp-"))
-        self.assertEqual(sent["task"], "ENG-12")
+        self.assertEqual(sent["task"], "#12")
         self.assertEqual(sent["from"], "orchestrator")
         self.assertEqual(sent["to"], "backend-lead")
         self.assertEqual(sent["body"], "Implement the auth endpoints.")
@@ -78,7 +78,7 @@ class DispatchCliTests(unittest.TestCase):
         sent = json.loads(run_cmd(
             self.tmp_path, "dispatch", "send",
             "--from", "orchestrator", "--to", "backend-lead",
-            "--task", "ENG-12", "--subject", "Build auth",
+            "--task", "#12", "--subject", "Build auth",
             "Implement the auth endpoints.",
         ).stdout)
         # stdout carries the delivery verdict...
@@ -107,8 +107,8 @@ class DispatchCliTests(unittest.TestCase):
         sent = json.loads(run_cmd(
             self.tmp_path, "dispatch", "send",
             "--from", "backend-lead", "--to", "orchestrator",
-            "--kind", "report-done", "--task", "ENG-12", "--no-wake",
-            "Done; updated ENG-12 in Linear.",
+            "--kind", "report-done", "--task", "#42", "--no-wake",
+            "Done; updated issue #42 on GitHub.",
         ).stdout)
         self.assertEqual(sent["kind"], "report-done")
         self.assertEqual(sent["from"], "backend-lead")
@@ -183,11 +183,11 @@ class DispatchCliTests(unittest.TestCase):
         # session's request.
         req = json.loads(run_cmd(
             self.tmp_path, "dispatch", "send", "--from", "orchestrator",
-            "--to", "backend-lead", "--task", "MIN-119",
+            "--to", "backend-lead", "--task", "#119",
             "--session", "macbook-seo", "--no-wake", "do seo thing",
         ).stdout)
         run_cmd(self.tmp_path, "dispatch", "send", "--from", "backend-lead",
-                "--to", "orchestrator", "--kind", "report-done", "--task", "MIN-119",
+                "--to", "orchestrator", "--kind", "report-done", "--task", "#119",
                 "--session", "macbook-heatmap", "--no-wake", "done elsewhere")
 
         seo_status = json.loads(run_cmd(

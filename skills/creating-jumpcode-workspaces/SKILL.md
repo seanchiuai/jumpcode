@@ -13,7 +13,7 @@ Authoritative background, read alongside this skill:
 - `$JUMPCODE_HOME/README.md` → **"Creating a workspace: the Goal Contract"** (the contract this
   skill implements; 🔒 = hard gate).
 - `$JUMPCODE_HOME/INSTRUCTIONS.md` (commands, session scoping, reporting).
-- `$JUMPCODE_HOME/CLAUDE.md` house rules (Linear team policy; commit/push only when asked).
+- `$JUMPCODE_HOME/CLAUDE.md` house rules (GitHub repo policy; commit/push only when asked).
 
 <HARD-GATE>
 Define the goal and gather repo context BEFORE creating anything. Charters and the roster all
@@ -31,17 +31,21 @@ Create a TodoWrite item per step and do them in order.
      a feature behaves like Y).
    - **Scope forks** — the decisive ambiguous choices only the human can make. Ask these.
    - **Repo** — the git repo this binds to.
-   Derive the rest (slug, base branch=`staging` unless the repo has none, roster) and confirm
-   only where genuinely in doubt. Convert any relative dates to absolute when you record them.
+   - **Issue reference** — if the mission cites an issue by number ("for issue 2248"), resolve it
+     FIRST: look it up with `gh issue view <n>` in the target repo. The issue's body IS the
+     spec — goal, final state, blockers, cross-team dependencies. Read it in full; it often hands
+     you the scope forks to ask and the base-branch dependency (step 5).
+   Derive the rest (slug, roster, base branch) and confirm only where genuinely in doubt — but see
+   the base-branch dependency rule in step 5. Convert any relative dates to absolute when recorded.
 
 2. **Gather repo context** — inspect the target repo enough to scope the work and the roster
    (stack, existing relevant tooling, test command). This is YOUR research, not the team's; keep
    it to what the contract needs. (For the work itself, the team does the deep dive after launch.)
 
-3. **Pick the system of record.** Default is **Linear** (team given by the human; never the
-   personal `SEA` team; never auto-create a team). A workspace may instead use **GitHub issues**
-   (`gh`) — if so, it MUST be enforced by a thin orchestrator overlay (step 5), because the
-   launcher's init prompt and the central charter both assume Linear.
+3. **Pick the system of record.** Default is **GitHub issues** (`gh`) — file in the workspace's
+   own repo; never invent or auto-create a repo. If the target repo is not given, ask. A workspace
+   may instead use a different tracker — if so, it MUST be enforced by a thin orchestrator overlay
+   (step 5), because the launcher's init prompt and the central charter both assume GitHub issues.
 
 4. **Offer and STRONGLY RECOMMEND the `/goal` kickoff.** When creating any workspace, present the
    `/goal` command as the preferred way to start the orchestrator and strongly recommend it (see
@@ -53,6 +57,12 @@ Create a TodoWrite item per step and do them in order.
    git -C <repo> worktree add <repo>/.worktrees/<slug> -b <slug> <base-branch>
    mkdir -p <repo>/.worktrees/<slug>/.jumpcode/roles   # .jumpcode is git-excluded in the repo
    ```
+   **Base branch is usually `staging` — but if the work depends on code/config that lives only on
+   an unmerged branch (config keys, utils, a sibling feature), cut off THAT branch instead** so the
+   team inherits the dependency and can run in PARALLEL with whoever owns it. Then: verify the
+   dependency is actually present on your base (`grep`/`git show <base>:<file>`) before launch, and
+   record the rebase-onto-`staging` follow-up in both `workspace.json` `_comment` and the
+   orchestrator overlay so the team rebases once the dependency lands in `staging`.
 
 6. **Write `workspaces/<slug>/workspace.json`** (settings only — there is no roster here):
    ```json
@@ -69,10 +79,10 @@ Create a TodoWrite item per step and do them in order.
 7. **Add role overlays** in `<worktree>/.jumpcode/roles/` (overlay overrides central by role id;
    it can ADD or OVERRIDE but cannot subtract a central basic). Two common cases:
    - **System-of-record override** → a *thin* `🧭 orchestrator.md` that says "follow the central
-     charter at `$JUMPCODE_HOME/roles/🧭 orchestrator.md` EXCEPT: system of record is GitHub issues
-     in `<owner/repo>` via `gh`, not Linear; ignore the Linear line in the launch prompt." Add any
-     other per-workspace gates here (e.g. an API-key pause gate). Keep it thin and reference the
-     central charter — do not duplicate it.
+     charter at `$JUMPCODE_HOME/roles/🧭 orchestrator.md` EXCEPT: system of record is <the
+     alternate tracker>, not GitHub issues; ignore the GitHub-issues line in the launch prompt."
+     Add any other per-workspace gates here (e.g. an API-key pause gate). Keep it thin and
+     reference the central charter — do not duplicate it.
    - **Specialist lead** → a full charter `<emoji> <id>-lead.md` for a domain the base set doesn't
      cover (see seo's `content-lead`, ambassador's `integrity-lead`).
 
@@ -111,8 +121,8 @@ Create a TodoWrite item per step and do them in order.
 `/goal <mission>` is a global Claude command (`~/.claude/commands/goal.md`; canonical copy shipped
 at `$JUMPCODE_HOME/commands/goal.md`). Typed into an orchestrator pane, it runs the orchestrator's
 operating loop: confirm roster via `health`, restate + decompose the mission, file one tracking
-issue per workstream in the workspace's system of record (it checks the charter to know GitHub vs
-Linear), dispatch the right leads, integrate + enforce the review gate, report to the human.
+issue per workstream in the workspace's system of record (it checks the charter to know which
+tracker is in use), dispatch the right leads, integrate + enforce the review gate, report to the human.
 
 Ensure it is installed before launch:
 ```bash
@@ -125,7 +135,9 @@ offer it every time. The alternative (typing a freeform directive) loses the str
 ## Don'ts
 
 - Don't create a workspace on a vague goal, or skip repo-context gathering (the hard gate).
-- Don't file work in the personal `SEA` Linear team, and never auto-create a Linear team.
+- Don't invent or auto-create a repo; file issues in the workspace's own repo (ask if unspecified).
 - Don't push the `.jumpcode` repo automatically — commit/push only when the human asks (the repo
   has a public remote).
 - Don't duplicate the central orchestrator charter in an overlay — reference it and state deltas.
+- Don't reflexively base off `staging` when the work needs unmerged code — resolve the issue and
+  its dependency first (steps 1 & 5).

@@ -24,8 +24,8 @@ security; validation and error handling; schema/migration risk; idempotency and
 concurrency; observability/logging for failures; test coverage at useful boundaries;
 frontend integration assumptions; deploy/config/environment needs.
 
-The task itself lives in **Linear** — read its acceptance criteria there and update it as
-you progress.
+The task itself lives in **GitHub issues** — read its acceptance criteria there (`gh issue
+view`) and update it as you progress.
 
 ## 4. Interaction rules
 

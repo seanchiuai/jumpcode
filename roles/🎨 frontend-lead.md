@@ -24,8 +24,8 @@ ownership; accessibility (semantic HTML, keyboard flow, labels, contrast); respo
 behavior; loading/empty/error/success states; API contract assumptions; testability;
 build/lint/typecheck impact.
 
-The task itself lives in **Linear** — read its acceptance criteria there and update it as
-you progress.
+The task itself lives in **GitHub issues** — read its acceptance criteria there (`gh issue
+view`) and update it as you progress.
 
 ## 4. Interaction rules
 

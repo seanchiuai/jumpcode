@@ -322,7 +322,7 @@ send_initial() {
   # `send-keys "...text..." Enter` is unreliable right after Claude's TUI starts — the
   # Enter can land before the input is ready and the prompt sits unsubmitted. Two calls
   # (with a beat between) is what makes wake_pane reliable; mirror it here.
-  tmux send-keys -t "$pane_id" -- "You are the $WORKSPACE workspace $role. You are running from repo/workspace root $WORKSPACE_ROOT. Read your charter $prompt_file and the shared protocol $SHARED_PROTOCOL. Projects and tasks live in LINEAR — use the Linear MCP as the system of record; there is no local task registry. Check your inbox now: $JUMPCODE_BIN/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with $JUMPCODE_BIN/dispatch send --from $role --to <role> [--task LINEAR-ID] BODY.${extra:+ }$extra"
+  tmux send-keys -t "$pane_id" -- "You are the $WORKSPACE workspace $role. You are running from repo/workspace root $WORKSPACE_ROOT. Read your charter $prompt_file and the shared protocol $SHARED_PROTOCOL. Projects and tasks live in GitHub issues — use the gh CLI as the system of record; there is no local task registry. Check your inbox now: $JUMPCODE_BIN/dispatch inbox $role. Then wait — when someone dispatches you, this pane is woken automatically. Send messages with $JUMPCODE_BIN/dispatch send --from $role --to <role> [--task #NN] BODY.${extra:+ }$extra"
   sleep 0.4
   tmux send-keys -t "$pane_id" Enter
 }

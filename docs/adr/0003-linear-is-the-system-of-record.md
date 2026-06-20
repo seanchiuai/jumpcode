@@ -1,5 +1,7 @@
 # Linear is the System of Record for Projects and Tasks
 
+> **Status: Superseded by ADR 0006** (superseded 2026-06-17 — GitHub issues are now the system of record). This record is kept for history; the body below describes the prior decision.
+
 Projects and tasks live in **Linear**, not in the jumpcode. A project is a Linear project; a task is a Linear issue. The orchestrator (and Hermes) read/write them via Linear. The jumpcode deliberately keeps **no** local project/task/run registry.
 
 ## Why

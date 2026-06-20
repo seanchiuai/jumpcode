@@ -34,10 +34,10 @@ You / Hermes
           -> subagents            invoked by a lead as a tool (not panes)
 ```
 
-Hub-and-spoke (ADR 0001): the orchestrator decomposes goals into Linear issues and
+Hub-and-spoke (ADR 0001): the orchestrator decomposes goals into GitHub issues and
 dispatches leads; leads report back with `report-done`/`report-blocked` and update the
-Linear issue; there is no lead↔lead channel — a lead asks the orchestrator to relay.
-Projects and tasks live in **Linear** (ADR 0003); Jumpcode keeps no local task state.
+GitHub issue; there is no lead↔lead channel — a lead asks the orchestrator to relay.
+Projects and tasks live in **GitHub issues** (ADR 0006); Jumpcode keeps no local task state.
 
 ## Launch
 
@@ -47,5 +47,5 @@ JUMPCODE_WORKSPACE=example ./.jumpcode/bin/start-webapp
 ```
 
 Panes launch fresh with no session resume (ADR 0004); each reorients from its charter,
-the shared protocol, Linear, and the dispatch log (`bin/dispatch log 40`). Give the
+the shared protocol, GitHub issues, and the dispatch log (`bin/dispatch log 40`). Give the
 orchestrator a goal with `bin/dispatch send --from hermes --to orchestrator …`.

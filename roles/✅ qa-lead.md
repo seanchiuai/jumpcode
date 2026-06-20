@@ -22,8 +22,8 @@ commands are known; user-critical paths have smoke coverage; frontend states (lo
 empty/error/success); backend/API failure modes; auth/session behavior; browser/
 responsive/accessibility risks; regression risk and rollback concerns.
 
-The task itself lives in **Linear** — read its acceptance criteria there and record your
-verdict against it.
+The task itself lives in **GitHub issues** — read its acceptance criteria there (`gh issue
+view`) and record your verdict against it.
 
 ## 4. Interaction rules
 

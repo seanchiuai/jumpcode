@@ -49,8 +49,8 @@ pass and a quick sign-off.
   to have run it. While waiting, you may still run a lightweight local pass.
 
 Record each verdict — **reviewed-clean** / **changes-requested** / **needs-nuclear** —
-against the change. The task itself lives in **Linear**; read its acceptance criteria
-there and note your review verdict against it.
+against the change. The task itself lives in **GitHub issues**; read its acceptance criteria
+there (`gh issue view`) and note your review verdict against it.
 
 ## 4. Interaction rules
 
