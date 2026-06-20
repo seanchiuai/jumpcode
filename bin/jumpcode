@@ -514,6 +514,39 @@ def _age_str(iso_ts: Optional[str]) -> str:
     return f"{secs // 3600}h"
 
 
+def _age_secs(iso_ts: Optional[str]) -> Optional[int]:
+    """Age of an ISO-8601 'Z' timestamp in whole seconds, or None if unparseable.
+    The numeric sibling of _age_str (which returns a display string)."""
+    if not iso_ts:
+        return None
+    try:
+        t = datetime.strptime(iso_ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return int((datetime.now(timezone.utc) - t).total_seconds())
+
+
+FLEET_IDLE_SECS = 600  # all panes idle AND no dispatch newer than this -> "idle"
+
+
+def classify_workspace(w: Dict[str, Any]) -> str:
+    """Pure status classifier for one workspace. First match wins:
+    error -> active -> idle -> past. Input keys:
+      alive (bool), agents (list of {state}), last_dispatch_age_secs (int|None),
+      stale_open_loops (int), config_ok (bool).
+    """
+    if not w["alive"]:
+        return "past"
+    # error: only meaningful while alive
+    if not w["config_ok"] or w["stale_open_loops"] > 0:
+        return "error"
+    age = w["last_dispatch_age_secs"]
+    recent = age is not None and age < FLEET_IDLE_SECS
+    if any(a.get("state") in ("working", "waiting") for a in w["agents"]) or recent:
+        return "active"
+    return "idle"
+
+
 def pane_states_by_role(session: str) -> Dict[str, str]:
     """role -> working/waiting/idle for live panes in the session (empty if none)."""
     if not session:
@@ -961,6 +994,53 @@ def scan_session(session: str, subs: Dict[str, List[str]]) -> List[Dict[str, Any
             "state": state, "subagents": subs.get(role, []),
         })
     return agents
+
+
+def workspace_config_ok(home: Path, workspace: str, manifest: Dict[str, Any]) -> bool:
+    """True if the workspace's config still resolves: workspace.json present+parseable
+    and every recorded role cwd still exists. Used as a fleet 'error' signal."""
+    try:
+        settings = load_workspace_settings(home, workspace)
+    except Exception:
+        return False
+    if not settings:
+        return False
+    for r in manifest.get("roles", []):
+        cwd = r.get("cwd")
+        if cwd and not Path(cwd).exists():
+            return False
+    return True
+
+
+def gather_fleet(home: Path) -> List[Dict[str, Any]]:
+    """One row per recorded workspace, classified. Reads all manifests + the dispatch
+    log once, scans live sessions via scan_session, and runs the pure classifier."""
+    all_dispatches = events(home, "dispatch")
+    rows: List[Dict[str, Any]] = []
+    sdir = sessions_dir(home)
+    manifests = sorted(sdir.glob("*.json")) if sdir.exists() else []
+    for f in manifests:
+        workspace = f.stem
+        manifest = load_manifest(home, workspace) or {}
+        session = manifest.get("session") or ""
+        alive = bool(session) and _tmux_session_alive(session)
+        agents = scan_session(session, {}) if alive else []
+        ws_dispatches = [d for d in all_dispatches if d.get("session") == session]
+        last_ts = max((d.get("created_at") or "" for d in ws_dispatches), default="")
+        age = _age_secs(last_ts) if last_ts else None
+        stale = sum(1 for r in open_requests(ws_dispatches)
+                    if (_age_secs(r.get("created_at") or "") or 0) >= FLEET_IDLE_SECS)
+        config_ok = workspace_config_ok(home, workspace, manifest)
+        status = classify_workspace({
+            "alive": alive, "agents": agents, "last_dispatch_age_secs": age,
+            "stale_open_loops": stale, "config_ok": config_ok,
+        })
+        rows.append({
+            "workspace": workspace, "session": session, "status": status,
+            "alive": alive, "agents": agents, "config_ok": config_ok,
+            "stale_open_loops": stale, "last_dispatch": last_ts or None,
+        })
+    return rows
 
 
 def cmd_health(args: argparse.Namespace, home: Path) -> int:
