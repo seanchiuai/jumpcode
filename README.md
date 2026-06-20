@@ -3,16 +3,16 @@
 This directory is the local, project-owned orchestration layer for `workspace-macbook`.
 It is intentionally small: no daemon, no database, no cloud dependency. It owns only the
 *delivery* layer — visible panes, live wake, and a durable dispatch log. Projects and
-tasks live in **Linear**, not here.
+tasks live in **GitHub issues**, not here.
 
 For canonical terms see [`CONTEXT.md`](CONTEXT.md); for the decisions behind the design
-see [`docs/adr/`](docs/adr/) (0001–0004). Those are the authority if anything here
+see [`docs/adr/`](docs/adr/) (0001–0006). Those are the authority if anything here
 conflicts.
 
 ## The one mental model
 
 > Human + Hermes drive the **orchestrator**, which commands its **team leads**, which
-> invoke general **subagents** as a tool. **Projects and tasks live in Linear.** The
+> invoke general **subagents** as a tool. **Projects and tasks live in GitHub issues.** The
 > jumpcode only moves messages between visible panes and remembers what was said.
 
 ## Core primitive: the dispatch
@@ -30,7 +30,7 @@ There is a single CLI verb, `dispatch`:
 # send (live wake + durable log)
 ./.jumpcode/bin/dispatch send \
   --from <role> --to <role> \
-  [--project <LINEAR-PROJECT>] [--task <LINEAR-ISSUE>] \
+  [--project <owner/repo>] [--task #42] \
   [--subject "<subject>"] \
   [--kind request|reply|report-done|report-blocked|notice] \
   [--no-wake] \
@@ -44,6 +44,7 @@ There is a single CLI verb, `dispatch`:
 
 # monitor
 ./.jumpcode/bin/health [--json]                  # per-role: alive · working/waiting/idle · runtime · subagents
+./.jumpcode/bin/fleet [--json|--once]            # live dashboard of ALL workspaces + status (active/idle/past/error)
 ./.jumpcode/bin/peek <role> [lines]              # read-only view of a role's pane (never wakes it)
 ./.jumpcode/bin/jumpcode roles discover --workspace <name> --json  # validated role discovery
 ```
@@ -74,18 +75,18 @@ Human-readable activity is mirrored to:
 - `convo [lines]` — tails the human-readable conversation log (default 80).
 - `start-webapp` — launches the `webapp` workspace tmux grid (fresh agents).
 
-## Where work lives: Linear
+## Where work lives: GitHub issues
 
-A **project** is a Linear project; a **task** is a Linear issue (ADR 0003). Agents read
-and update them via the Linear MCP. The jumpcode keeps **no** local copy of project/task state.
-"Done" is informal: update the Linear issue and send a `report-done` dispatch.
+A **project** is a GitHub repo/milestone; a **task** is a GitHub issue (ADR 0006). Agents read
+and update them via the `gh` CLI. The jumpcode keeps **no** local copy of project/task state.
+"Done" is informal: update the GitHub issue and send a `report-done` dispatch.
 
 ## Roles and topology
 
 Role panes are discovered from prompt folders, not roster JSON. Central `$JUMPCODE_HOME/roles` is the base set; a repo may add `$WORKSPACE_ROOT/.jumpcode/roles` files that overlay central prompts by canonical role id. A repo-local `_PROTOCOL.md` overrides the central protocol when present; otherwise the central `_PROTOCOL.md` is used. `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and must not contain team roster maps.
 
 - **Orchestrator** — one per workspace, the single accountable agent; a visible right
-  pane. Receives goals from Human/Hermes, decomposes into Linear issues, commands leads.
+  pane. Receives goals from Human/Hermes, decomposes into GitHub issues, commands leads.
 - **Team leads** — durable, repo-specific accountable agents (e.g. frontend-lead,
   backend-lead, qa-lead); visible left panes, launched without `-p`.
 - **Subagents** — general, repo-agnostic Claude Code subagents (e.g. a code reviewer) a
@@ -104,7 +105,7 @@ creating: the charters and roster all depend on the mission, so launching a team
 vague or wrongly-scoped goal wastes work in the wrong direction.
 
 Resolve every field below before launch. **🔒 = hard gate** — cannot launch until it's
-resolved. The rest are **derived** from the goal, repo, and Linear, and confirmed only
+resolved. The rest are **derived** from the goal, repo, and GitHub issues, and confirmed only
 when genuinely in doubt; if the direction is obvious, set it and move on (don't ask what
 you can safely derive).
 
@@ -119,10 +120,10 @@ you can safely derive).
 - 🔒 **Repo** — every workspace is bound to one git repo + a new worktree at
   `<repo>/.worktrees/<slug>`.
 - **Base branch** — default `staging`; ask only if the repo has none.
-- **System of record** — default **Linear**: attach to an *existing* team + project; ask which
-  existing one if not given. Never auto-create a team or project (and never the personal `SEA`
-  team). A workspace may instead track work as **GitHub issues** (`gh`) — if so, enforce it with a
-  thin orchestrator overlay, since the launcher prompt and central charter assume Linear.
+- **System of record** — default **GitHub issues** (`gh`): file issues in the workspace's own
+  repo; ask which repo if not given. Never invent or auto-create a repo. A workspace may instead
+  track work in a different tracker — if so, enforce it with a thin orchestrator overlay, since
+  the launcher prompt and central charter assume GitHub issues.
 
 **Derived — confirm only if doubtful:**
 - **Slug** → session `macbook-<slug>`, the worktree path, and the feature branch.
@@ -142,14 +143,14 @@ that clearly serves the goal.
 orchestrator pane is idle, hand it the mission with the global `/goal <mission>` command
 (`commands/goal.md`, installed to `~/.claude/commands/`). It runs the orchestrator's
 decompose → file-issues → dispatch → integrate → review-gate loop from one mission string,
-checking the charter to know GitHub-vs-Linear. Offer it every time; the freeform alternative
+checking the charter to know which tracker is in use. Offer it every time; the freeform alternative
 loses the structured loop. The full procedure lives in the **`creating-jumpcode-workspaces`
 skill** (`skills/creating-jumpcode-workspaces/SKILL.md`).
 
 ## Continuity: always fresh
 
 Launching a workspace always starts clean Claude agents with no session resume (ADR
-0004). A fresh agent reconstructs context from the durable sources — Linear and the
+0004). A fresh agent reconstructs context from the durable sources — GitHub issues and the
 dispatch log. "Close workspace" = close the window; the saved config persists.
 
 ## Design constraints

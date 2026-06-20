@@ -15,12 +15,12 @@ Use it whenever coordination needs to be **delivered live and remembered**:
 
 For tiny one-shot answers, do not send dispatches.
 
-## Where work lives: Linear, not here
+## Where work lives: GitHub issues, not here
 
-A **project** is a Linear project; a **task** is a Linear issue (ADR 0003). Read and
-write them with the Linear MCP. There is **no local task/project/run registry** — the
+A **project** is a GitHub repo/milestone; a **task** is a GitHub issue (ADR 0006). Read and
+write them with the `gh` CLI. There is **no local task/project/run registry** — the
 jumpcode owns only delivery (wake) and the dispatch log. "Done" is informal: update the
-Linear issue and report via dispatch.
+GitHub issue and report via dispatch.
 
 ## Source of truth
 
@@ -49,11 +49,11 @@ The single verb is `dispatch`:
 ```bash
 # send a dispatch (live wake + durable log)
 ./.jumpcode/bin/dispatch send --from orchestrator --to backend-lead \
-  --task <LINEAR-ISSUE> --subject "Start work" "Please implement X."
+  --task #42 --subject "Start work" "Please implement X."
 
 # report (close the loop): pair the report to its request with --reply-to
 ./.jumpcode/bin/dispatch send --from backend-lead --to orchestrator \
-  --kind report-done --task <LINEAR-ISSUE> --reply-to <REQUEST-DISPATCH-ID> "Done; …"
+  --kind report-done --task #42 --reply-to <REQUEST-DISPATCH-ID> "Done; …"
 
 # inspect
 ./.jumpcode/bin/dispatch inbox backend-lead
@@ -63,6 +63,7 @@ The single verb is `dispatch`:
 # wrappers
 ./.jumpcode/bin/status        # open loops: requests with no matching report (+ pane state)
 ./.jumpcode/bin/health        # per-role: alive · working/waiting/idle · runtime · subagents
+./.jumpcode/bin/fleet         # live dashboard of ALL workspaces + status (active/idle/past/error); --json / --once
 ./.jumpcode/bin/peek <role> [n] # read-only view of a role's pane (never wakes it)
 ./.jumpcode/bin/convo 80      # tail the conversation feed
 ./.jumpcode/bin/start-webapp  # launch the webapp grid (fresh)
@@ -86,17 +87,17 @@ delivered.
 ## Reporting discipline
 
 When a unit of work finishes or stalls, send a dispatch back to whoever assigned it
-**and** update the Linear issue:
+**and** update the GitHub issue:
 
 ```bash
 # done
 ./.jumpcode/bin/dispatch send --from backend-lead --to orchestrator \
-  --kind report-done --task <LINEAR-ISSUE> \
+  --kind report-done --task #42 \
   "Summary; what changed; checks run; open concerns; recommended next step."
 
 # blocked
 ./.jumpcode/bin/dispatch send --from backend-lead --to orchestrator \
-  --kind report-blocked --task <LINEAR-ISSUE> \
+  --kind report-blocked --task #42 \
   "Blocker; why; what you tried; what you need from the orchestrator."
 ```
 
@@ -111,8 +112,8 @@ another lead. Neither Human nor Hermes addresses subagents directly.
 
 ## Continuity
 
-Bare `start-webapp` launches panes **fresh** (ADR 0004) — reconstruct context from Linear
-and the dispatch log (`./.jumpcode/bin/dispatch log 40`).
+Bare `start-webapp` launches panes **fresh** (ADR 0004) — reconstruct context from GitHub
+issues and the dispatch log (`./.jumpcode/bin/dispatch log 40`).
 
 To reopen a workspace **resumed** instead (each role reconnecting to its prior session),
 use `revive` (ADR 0005):
