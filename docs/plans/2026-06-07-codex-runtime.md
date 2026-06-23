@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Let any jumpcode role run **Codex** instead of Claude Code, chosen per-role in `workspace.json`, without changing the dispatch/wake/Linear layers.
+**Goal:** Let any jumpcode role run **Codex** instead of Claude Code, chosen per-role in `workspace.json`, without changing the dispatch/wake/tracker layers.
 
 **Architecture:** Add a per-role `role_runtimes` map (default `claude`) read by the launcher; an inline, data-shaped runtime descriptor that maps a runtime name → `{program, markers}`; tag each pane with a `@jumpcode_runtime` tmux option (mirroring `@jumpcode_role`); and make `pane_state()` runtime-keyed so health classifies Codex panes correctly. Everything already runtime-agnostic (dispatch log, `wake_pane`, `@jumpcode_role`, hub-and-spoke) is untouched.
 
@@ -196,7 +196,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Step 1: Add the knob to the webapp workspace (default unchanged behavior)**
 
-Add a `role_runtimes` object to `workspaces/webapp/workspace.json` after `role_emojis`. Leave it empty so the default launch stays all-Claude (Codex requires Sean's prerequisites — Linear MCP, trusted dirs):
+Add a `role_runtimes` object to `workspaces/webapp/workspace.json` after `role_emojis`. Leave it empty so the default launch stays all-Claude (Codex requires Sean's prerequisites — the tracker MCP, trusted dirs):
 
 ```json
   "role_emojis": {
@@ -450,7 +450,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Charter / protocol notes (subagents optional, Linear-MCP assumption)
+### Task 5: Charter / protocol notes (subagents optional, tracker-MCP assumption)
 
 **Files:**
 - Modify: `roles/_PROTOCOL.md` (the Health & subagent self-report section)
@@ -467,10 +467,10 @@ Leads behave identically regardless of which runtime fills their pane. Two cavea
 - **Subagents are optional.** A Codex lead may not spawn subagents the way Claude Code
   does. The `subagent:start`/`subagent:end` self-report convention is advisory — absence
   of subagents is normal, not an error.
-- **Linear access depends on the runtime's MCP.** Linear is the system of record. A Codex
-  lead can only read/update Linear if `~/.codex/config.toml` has a `[mcp_servers.linear]`
+- **Tracker access depends on the runtime's MCP.** GitHub issues is the system of record. A Codex
+  lead can only read/update the tracker if `~/.codex/config.toml` has a `[mcp_servers.<tracker>]`
   entry. If yours does not, report progress via `dispatch` and let the orchestrator make
-  the Linear writes.
+  the tracker writes.
 ```
 
 **Step 2: Verify the docs render (no tooling — just read it back)**
@@ -482,7 +482,7 @@ Expected: one match — the new heading is present.
 
 ```bash
 git add roles/_PROTOCOL.md
-git commit -m "docs(protocol): note Codex runtime caveats (optional subagents, Linear MCP)
+git commit -m "docs(protocol): note Codex runtime caveats (optional subagents, tracker MCP)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -492,7 +492,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 6: Live mixed-launch verification (closes the busy-marker TO-VERIFY gap)
 
 > This task needs Sean's prerequisites in place (a runnable codex binary, and ideally
-> Linear MCP + trusted dirs). It is the one task that consumes Codex quota. Do it with
+> the tracker MCP + trusted dirs). It is the one task that consumes Codex quota. Do it with
 > Sean present; if prerequisites aren't ready, stop and report — do not block the plan.
 
 **Files:** none (verification only; may update `_RUNTIME_MARKERS["codex"]["busy"]` if the live busy string differs).

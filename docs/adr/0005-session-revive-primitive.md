@@ -7,9 +7,9 @@ not overturn) ADR 0004.
 ## Why
 
 ADR 0004 made "always launch fresh" the default and dropped resume to keep the launcher
-simple and lean on durable sources (Linear, the dispatch log). That default stands. But in
+simple and lean on durable sources (the external tracker, the dispatch log). That default stands. But in
 practice some reopens want the agents' *own* prior context back — a team mid-thought after a
-window close or relogin, where reconstructing from Linear loses the in-flight reasoning. We
+window close or relogin, where reconstructing from the tracker loses the in-flight reasoning. We
 already record every launched session id to a per-workspace manifest
 (`state/sessions/<ws>.json`), and `claude --resume` preserves the id (verified: ids recorded
 weeks ago are still the live, appended-to transcripts), so the brittleness ADR 0004 feared

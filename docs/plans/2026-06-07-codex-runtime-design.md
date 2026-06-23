@@ -24,10 +24,10 @@ each piece of this design:
 | hook/event-driven state (deferred, below) | **tmai** `attention: started\|halted\|completed` via runtime hooks (no polling) |
 
 What is genuinely *ours* and absent from all of them: the coordination layer —
-**Linear-as-system-of-record, the dispatch log, Hermes, hub-and-spoke charters, and
+**external-tracker-as-system-of-record, the dispatch log, Hermes, hub-and-spoke charters, and
 `@jumpcode_role` wake targeting**. That is why we **extend our launcher rather than adopt
 one of these tools**: they are worktree-per-task TUIs with their own UX; bolting our
-Linear/dispatch/Hermes model onto Claude Squad is more friction than ~30 lines in
+tracker/dispatch/Hermes model onto Claude Squad is more friction than ~30 lines in
 `start-webapp`.
 
 ## Decision
@@ -49,7 +49,7 @@ A throwaway tmux session running the app-bundled Codex (`codex-cli 0.137.0-alpha
   two load-bearing halves of `wake_pane`. Verified without submitting a turn.
 - **Waiting marker confirmed live**: Codex's first-run trust prompt shows `1. Yes,
   continue`, which the existing `_WAITING_MARKERS` already matches.
-- **Codex config has no Linear MCP** (only `pencil`, `node_repl`) — see Prerequisites.
+- **Codex config has no tracker MCP** (only `pencil`, `node_repl`) — see Prerequisites.
 
 **Busy marker — now confirmed live (2026-06-07).** A controlled throwaway turn on
 `0.137.0-alpha.4` showed the busy status line as `• Working (Ns • esc to interrupt)`,
@@ -67,7 +67,7 @@ A new optional map beside `role_emojis`:
 ```
 
 Any role not listed defaults to `claude`. The orchestrator stays `claude` unless
-explicitly overridden (it owns Linear writes + escalation).
+explicitly overridden (it owns tracker writes + escalation).
 
 ### 2. Structured runtime descriptor in `start-webapp` (inline, data-shaped)
 
@@ -98,7 +98,7 @@ rather than two module globals.
 Leads behave identically regardless of runtime. Two small notes in `_PROTOCOL.md`:
 - A Codex lead may not spawn subagents the way Claude does — the subagent self-report
   convention stays **optional** (absence is fine; `active_subagents` already tolerates it).
-- The Linear-as-SoT instruction assumes the user has wired Codex's Linear MCP (below).
+- The tracker-as-SoR instruction assumes the user has wired Codex's tracker MCP (below).
 
 ## Architecture / data flow
 
@@ -123,7 +123,7 @@ health ──list-panes @jumpcode_role + @jumpcode_runtime──▶ pane_state(c
 | `role_runtimes` map | `workspaces/webapp/workspace.json` | optional; default `claude` |
 | runtime descriptor + `@jumpcode_runtime` | `bin/start-webapp` | inline, data-shaped; default `CODEX_BIN` = app binary |
 | runtime-keyed `pane_state` | `bin/jumpcode` (`cmd_health`) | reads `@jumpcode_runtime`; per-runtime marker table |
-| subagent/Linear notes | `roles/_PROTOCOL.md` | advisory |
+| subagent/tracker notes | `roles/_PROTOCOL.md` | advisory |
 
 ## Error handling
 
@@ -153,7 +153,7 @@ health ──list-panes @jumpcode_role + @jumpcode_runtime──▶ pane_state(c
 
 - A **runnable codex binary** (reinstall the standalone CLI, or keep `CODEX_BIN` pointed at
   the app binary).
-- **Linear MCP in `~/.codex/config.toml`** (`[mcp_servers.linear]` + OAuth). Without it a
+- **Tracker MCP in `~/.codex/config.toml`** (`[mcp_servers.<tracker>]` + OAuth). Without it a
   Codex lead cannot reach the system of record. Sean: *"i'll take care of it."*
 - **Trust** the workspace/repo dirs for Codex, so the pane reaches its composer instead of
   sitting on the trust prompt.
@@ -167,7 +167,7 @@ health ──list-panes @jumpcode_role + @jumpcode_runtime──▶ pane_state(c
   indirection layer built for it now (YAGNI until a second consumer).
 - **git-worktree-per-agent** (near-universal in claude-squad/AMUX/Conductor). Solves
   parallel-branch racing; our model is domain-partitioned leads on a *shared* repo
-  coordinated via Linear — a different problem. Not changing it.
+  coordinated via the tracker — a different problem. Not changing it.
 - **Codex `app-server`/`remote-control` transport** — cleaner than send-keys in theory,
   but a different transport from the visible-pane model we just hardened. Defer.
 - **A/B comparison, whole-workspace runtime flag, auto-wiring MCP, a `runtimes.json`

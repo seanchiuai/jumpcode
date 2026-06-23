@@ -2,11 +2,11 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Rebuild the jumpcode to match the grilled design — a working dispatch (live-wake + durable-log) system over visible orchestrator/team-lead panes, with projects/tasks delegated entirely to Linear.
+**Goal:** Rebuild the jumpcode to match the grilled design — a working dispatch (live-wake + durable-log) system over visible orchestrator/team-lead panes, with projects/tasks delegated entirely to the external tracker (GitHub issues).
 
-**Architecture:** Slim the Python CLI down to *dispatch* only (retire the local run/task/project/report registry — Linear is the system of record per ADR 0003). Make the wake mechanism actually work by targeting panes via a machine-readable `@jumpcode_role` tmux option instead of the Claude-overwritten pane title. Restructure role prompts into thin charters + one shared protocol. Always launch fresh (ADR 0004); agents orient from Linear + the dispatch log.
+**Architecture:** Slim the Python CLI down to *dispatch* only (retire the local run/task/project/report registry — GitHub issues is the system of record per ADR 0006). Make the wake mechanism actually work by targeting panes via a machine-readable `@jumpcode_role` tmux option instead of the Claude-overwritten pane title. Restructure role prompts into thin charters + one shared protocol. Always launch fresh (ADR 0004); agents orient from the tracker + the dispatch log.
 
-**Tech Stack:** Python 3 (stdlib only), bash, tmux, Claude Code CLI, Linear MCP (used by the agents, not the jumpcode).
+**Tech Stack:** Python 3 (stdlib only), bash, tmux, Claude Code CLI, the tracker MCP (used by the agents, not the jumpcode).
 
 **Authoritative design refs (read before starting):**
 - `.jumpcode/CONTEXT.md` (glossary)
@@ -17,7 +17,7 @@
 ## Pre-flight notes (deviations from the writing-plans defaults)
 
 - **Not a git repo + no worktree.** The skill assumes both. Decision needed (Task 0). Until then, "Commit" steps are written as `git ...` but are **no-ops if git isn't initialized** — do Task 0 first or skip the commit steps.
-- **The jumpcode never calls Linear.** Linear is the *agents'* responsibility via their Claude Code Linear MCP. No Linear code lands in the Python CLI. "Wiring Linear" = MCP availability for panes + charter instructions.
+- **The jumpcode never calls the tracker.** The tracker is the *agents'* responsibility via their Claude Code tracker MCP. No tracker code lands in the Python CLI. "Wiring the tracker" = MCP availability for panes + charter instructions.
 - **tmux/wake is hard to unit-test.** We isolate the *pure* part (mapping a role → pane id from `tmux list-panes` output) so it's TDD-able; the actual `send-keys` is a thin, manually-verified wrapper.
 - A live `macbook-webapp` tmux session and a stale `bb-ambassador` session predate this plan. Kill `bb-ambassador`; relaunch `macbook-webapp` only after Task 6.
 
@@ -267,8 +267,8 @@ def test_dispatch_send_logs_and_is_in_inbox(self):
 def test_report_kind_is_just_a_dispatch(self):
     sent = json.loads(run_cmd(self.tmp_path, "dispatch", "send",
         "--from", "backend-lead", "--to", "orchestrator",
-        "--kind", "report-done", "--task", "ENG-12", "--no-wake",
-        "Done; updated ENG-12 in Linear.").stdout)
+        "--kind", "report-done", "--task", "ISSUE-12", "--no-wake",
+        "Done; updated ISSUE-12 in the tracker.").stdout)
     self.assertEqual(sent["kind"], "report-done")
 ```
 (`--no-wake` lets tests avoid tmux.)
@@ -292,7 +292,7 @@ rm -f .jumpcode/state/runs.jsonl .jumpcode/state/tasks.jsonl .jumpcode/state/rep
 
 **Step 6: Commit**
 ```bash
-git add -A && git commit -m "feat(dispatch): replace mail/run/task/report with dispatch; Linear owns tasks"
+git add -A && git commit -m "feat(dispatch): replace mail/run/task/report with dispatch; GitHub issues own tasks"
 ```
 
 ---
@@ -309,7 +309,7 @@ exec python3 "$DIR/jumpcode" dispatch log "${1:-40}"
 ```
 **Step 2:** `ask` → make it a thin alias for `dispatch send --from ${JUMPCODE_FROM:-hermes} --to $1` (wake included by default), or delete it and standardize on `dispatch`. Recommended: delete `ask`; the dispatch verb now covers it.
 
-**Step 3:** `start-webapp` → the initial `send_initial` prompts should point agents at the **shared protocol + their charter** (Task 7 paths) and tell them to read **Linear**, not the retired `task`/`status` registry. Replace the per-pane send text accordingly. Keep the iTerm-open + monitor window. Confirm it still kills/relaunches cleanly.
+**Step 3:** `start-webapp` → the initial `send_initial` prompts should point agents at the **shared protocol + their charter** (Task 7 paths) and tell them to read the **tracker (GitHub issues)**, not the retired `task`/`status` registry. Replace the per-pane send text accordingly. Keep the iTerm-open + monitor window. Confirm it still kills/relaunches cleanly.
 
 **Step 4: Verify**
 ```bash
@@ -319,7 +319,7 @@ Expected: clean.
 
 **Step 5: Commit**
 ```bash
-git add -A && git commit -m "chore: point wrappers + launcher at dispatch/Linear/charters"
+git add -A && git commit -m "chore: point wrappers + launcher at dispatch/tracker/charters"
 ```
 
 ---
@@ -330,11 +330,11 @@ git add -A && git commit -m "chore: point wrappers + launcher at dispatch/Linear
 - Create: `.jumpcode/roles/_PROTOCOL.md` (shared protocol — common interaction rules)
 - Rewrite: `.jumpcode/roles/{orchestrator,frontend-lead,backend-lead,qa-lead}.md` as **thin charters** (4 sections: identity+domain, editable territory & soft guardrails, domain conventions, pointer to `_PROTOCOL.md`)
 
-**Step 1:** Write `_PROTOCOL.md` covering: the dispatch model (live + logged), how to read your inbox on a wake, how to report (dispatch `--kind report-done|report-blocked` **and** update the Linear issue), relay rules (leads can't talk to leads; ask the orchestrator), the topology (ADR 0001), and that work/tasks live in **Linear**.
+**Step 1:** Write `_PROTOCOL.md` covering: the dispatch model (live + logged), how to read your inbox on a wake, how to report (dispatch `--kind report-done|report-blocked` **and** update the tracker issue), relay rules (leads can't talk to leads; ask the orchestrator), the topology (ADR 0001), and that work/tasks live in the **tracker (GitHub issues)**.
 
 **Step 2:** Rewrite each role file to the 4-section thin charter. Backend lead territory e.g. `backend/**, api/**` (soft); frontend `frontend/**, ui/**`; qa `tests/**`. Each ends with "See `_PROTOCOL.md` for interaction rules."
 
-**Step 3: Verify** the orchestrator charter encodes: creates/decomposes work into Linear, dispatches leads, integrates, has general Linear access, is the only relay.
+**Step 3: Verify** the orchestrator charter encodes: creates/decomposes work into the tracker, dispatches leads, integrates, has general tracker access, is the only relay.
 
 **Step 4: Commit**
 ```bash
@@ -349,7 +349,7 @@ git add .jumpcode/roles && git commit -m "docs(roles): thin charters + shared pr
 - Rewrite: `.jumpcode/{README,INSTRUCTIONS,HANDOFF}.md`, `ORCHESTRATION.md`, `AGENTS.md`
 - Fix: `HANDOFF.md` corrupted token `任务/task`
 
-**Step 1:** Purge "run", "mail", "task registry", "report command" language. Replace with: dispatch, Linear-owned tasks, fresh-launch, charters/protocol, the 3-layer model (orchestrator/leads/subagents), and the human→lead direct path. Point readers to `CONTEXT.md` + `docs/adr/`.
+**Step 1:** Purge "run", "mail", "task registry", "report command" language. Replace with: dispatch, tracker-owned tasks, fresh-launch, charters/protocol, the 3-layer model (orchestrator/leads/subagents), and the human→lead direct path. Point readers to `CONTEXT.md` + `docs/adr/`.
 
 **Step 2: Verify** no stale terms remain:
 ```bash
@@ -365,11 +365,11 @@ git add -A && git commit -m "docs: reconcile all prose with grilled design"
 
 ---
 
-## Task 9: Linear MCP availability for panes (verify, don't assume)
+## Task 9: Tracker MCP availability for panes (verify, don't assume)
 
-**Why:** Orchestrator + leads must reach Linear. The jumpcode doesn't call Linear; the *panes'* Claude Code must have the Linear MCP. Sean previously did not want `.mcp.json` in the repo — so prefer user-level config.
+**Why:** Orchestrator + leads must reach the tracker. The jumpcode doesn't call the tracker; the *panes'* Claude Code must have the tracker MCP. Sean previously did not want `.mcp.json` in the repo — so prefer user-level config.
 
-**Step 1:** Check whether `claude` panes already see Linear tools (Hermes has it). Launch one throwaway pane and inspect, or check `~/.claude` / project MCP config. Document the finding.
+**Step 1:** Check whether `claude` panes already see tracker tools (Hermes has it). Launch one throwaway pane and inspect, or check `~/.claude` / project MCP config. Document the finding.
 
 **Step 2:** If not available, decide with Sean: user-level MCP (`~/.claude`) vs a repo `.mcp.json` (he disliked this). Configure the chosen one.
 
@@ -393,9 +393,9 @@ Expected: orchestrator / frontend-lead / backend-lead / qa-lead
 
 **Step 4: Drive the loop.** From Hermes:
 ```bash
-./.jumpcode/bin/dispatch send --from hermes --to orchestrator --subject "smoke" "Create a Linear issue for a trivial task, dispatch backend-lead to do it, and report back."
+./.jumpcode/bin/dispatch send --from hermes --to orchestrator --subject "smoke" "Create a tracker issue for a trivial task, dispatch backend-lead to do it, and report back."
 ```
-Watch: orchestrator pane wakes → dispatches backend-lead → backend-lead pane wakes → does it → reports (dispatch + Linear) → orchestrator integrates. Confirm each `wake` landed and each step appears in `dispatch log` + Linear.
+Watch: orchestrator pane wakes → dispatches backend-lead → backend-lead pane wakes → does it → reports (dispatch + tracker) → orchestrator integrates. Confirm each `wake` landed and each step appears in `dispatch log` + the tracker.
 
 **Step 5:** If a wake doesn't land, debug `wake_pane` against live `@jumpcode_role` output (the usual cause is a session-name/`JUMPCODE_TMUX_SESSION` mismatch).
 

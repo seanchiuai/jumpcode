@@ -1,12 +1,12 @@
 # GitHub Issues is the System of Record for Projects and Tasks
 
-Status: **Accepted** (2026-06-17). **Supersedes ADR 0003.**
+Status: **Accepted** (2026-06-17). **Supersedes the prior system-of-record decision.**
 
 Projects and tasks live in **GitHub issues**, not in the jumpcode. A task is a GitHub issue in the relevant repo; an issue number (`#42`) is its id. The orchestrator (and Hermes) read/write them via the **`gh` CLI**. The jumpcode deliberately keeps **no** local project/task/run registry.
 
 ## Why
 
-We dropped Linear entirely (its MCP plugin has been removed) in favour of GitHub issues, which sit next to the code the team actually changes and are reachable from any pane through the already-present `gh` CLI — no extra MCP wiring. GitHub provides just-enough structure (issues, labels, milestones, comments), one source of truth, no sync problem. This refines, rather than overturns, ADR 0003's principle: *the tracker is external; the jumpcode owns coordination, not task state.* Only the tracker changed.
+We adopted GitHub issues as the system of record — they sit next to the code the team actually changes and are reachable from any pane through the already-present `gh` CLI, with no extra MCP wiring. GitHub provides just-enough structure (issues, labels, milestones, comments), one source of truth, no sync problem. This refines, rather than overturns, the standing principle: *the tracker is external; the jumpcode owns coordination, not task state.* Only the tracker itself changed.
 
 ## What the jumpcode still owns
 
