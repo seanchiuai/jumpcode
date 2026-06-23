@@ -141,5 +141,129 @@ class SilentLoopTests(unittest.TestCase):
         self.assertEqual(jumpcode.fleet_silent_loops(disp), 0)
 
 
+def row(workspace, status, agents=None, config_ok=True, open_loops=0,
+        last_dispatch=None):
+    """Build a gathered-fleet row for the renderer (post-classification)."""
+    return {"workspace": workspace, "status": status, "agents": agents or [],
+            "config_ok": config_ok, "stale_open_loops": open_loops,
+            "last_dispatch": last_dispatch}
+
+
+class RenderTests(unittest.TestCase):
+    def test_all_four_headers_present_with_counts(self):
+        rows = [row("seo", "active", agents=[{"alive": True}]),
+                row("cleanup", "past")]
+        out = "\n".join(jumpcode._fleet_render(rows))
+        self.assertIn("ACTIVE (1)", out)
+        self.assertIn("INACTIVE (0)", out)
+        self.assertIn("BROKEN (0)", out)
+        self.assertIn("CLOSED — reopenable (1)", out)
+
+    def test_empty_section_still_prints_zero(self):
+        out = "\n".join(jumpcode._fleet_render([]))
+        for header in ("ACTIVE (0)", "INACTIVE (0)", "BROKEN (0)",
+                       "CLOSED — reopenable (0)"):
+            self.assertIn(header, out)
+
+    def test_closed_row_shows_revive_command(self):
+        out = "\n".join(jumpcode._fleet_render([row("cleanup", "past")]))
+        self.assertIn("revive cleanup", out)
+
+    def test_section_order_is_fixed(self):
+        out = "\n".join(jumpcode._fleet_render([]))
+        self.assertLess(out.index("ACTIVE"), out.index("INACTIVE"))
+        self.assertLess(out.index("INACTIVE"), out.index("BROKEN"))
+        self.assertLess(out.index("BROKEN"), out.index("CLOSED"))
+
+    def test_live_row_has_panes_and_no_status_word(self):
+        line = jumpcode._fleet_line(
+            row("seo", "active", agents=[{"alive": True}, {"alive": True}]))
+        self.assertIn("2/2 panes", line)
+        self.assertNotIn("active", line)  # status conveyed by section header
+
+    def test_error_row_shows_config_note(self):
+        line = jumpcode._fleet_line(row("bugsmash", "error", config_ok=False))
+        self.assertIn("config!", line)
+
+    def test_closed_row_omits_panes(self):
+        line = jumpcode._fleet_line(row("cleanup", "past"))
+        self.assertNotIn("panes", line)
+        self.assertIn("revive cleanup", line)
+
+
+def wrow(workspace, window, agents=None, activity="idle", config_ok=True,
+         open_loops=0, last_dispatch=None, session_alive=True):
+    """Build a gather_windows row for the list-view renderer."""
+    return {"workspace": workspace, "window": window, "activity": activity,
+            "agents": agents or [], "config_ok": config_ok,
+            "stale_open_loops": open_loops, "last_dispatch": last_dispatch,
+            "session_alive": session_alive}
+
+
+class ClassifyWindowTests(unittest.TestCase):
+    def test_parked_beats_open(self):
+        self.assertEqual(
+            jumpcode.classify_window({"parked": True, "window_open": True}), "parked")
+
+    def test_window_open_is_open(self):
+        self.assertEqual(
+            jumpcode.classify_window({"parked": False, "window_open": True}), "open")
+
+    def test_no_window_no_park_is_closed(self):
+        self.assertEqual(
+            jumpcode.classify_window({"parked": False, "window_open": False}), "closed")
+
+
+class WindowRenderTests(unittest.TestCase):
+    def test_three_headers_with_counts_shown_even_at_zero(self):
+        out = "\n".join(jumpcode._window_render([wrow("a", "open")]))
+        self.assertIn("OPEN (1)", out)
+        self.assertIn("PARKED — reopenable (0)", out)
+        self.assertIn("CLOSED — reopenable (0)", out)
+
+    def test_parked_and_closed_show_revive(self):
+        out = "\n".join(jumpcode._window_render(
+            [wrow("obs", "parked"), wrow("seo", "closed")]))
+        self.assertIn("revive obs", out)
+        self.assertIn("revive seo", out)
+
+    def test_open_row_shows_panes_not_revive(self):
+        line = jumpcode._window_line(
+            wrow("a", "open", agents=[{"alive": True}, {"alive": True}]))
+        self.assertIn("2/2 panes", line)
+        self.assertNotIn("revive", line)
+
+    def test_closed_running_hint(self):
+        running = jumpcode._window_line(wrow("seo", "closed", session_alive=True))
+        stopped = jumpcode._window_line(wrow("seo", "closed", session_alive=False))
+        self.assertIn("(still running)", running)
+        self.assertNotIn("(still running)", stopped)
+
+    def test_section_order_open_parked_closed(self):
+        out = "\n".join(jumpcode._window_render([]))
+        self.assertLess(out.index("OPEN"), out.index("PARKED"))
+        self.assertLess(out.index("PARKED"), out.index("CLOSED"))
+
+
+class ParkedStateTests(unittest.TestCase):
+    def test_park_unpark_roundtrip(self):
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            self.assertEqual(jumpcode.parked_set(home), set())
+            self.assertTrue(jumpcode.set_parked(home, "obs", True))
+            self.assertEqual(jumpcode.parked_set(home), {"obs"})
+            # idempotent: parking again reports no change
+            self.assertFalse(jumpcode.set_parked(home, "obs", True))
+            self.assertTrue(jumpcode.set_parked(home, "obs", False))
+            self.assertEqual(jumpcode.parked_set(home), set())
+
+    def test_corrupt_parked_file_reads_as_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            (home / "state").mkdir(parents=True)
+            jumpcode.parked_path(home).write_text("{not json", encoding="utf-8")
+            self.assertEqual(jumpcode.parked_set(home), set())
+
+
 if __name__ == "__main__":
     unittest.main()
