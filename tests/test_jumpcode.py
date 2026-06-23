@@ -115,7 +115,7 @@ class DispatchCliTests(unittest.TestCase):
 
     def test_dispatch_show_round_trips(self):
         sent = json.loads(run_cmd(
-            self.tmp_path, "dispatch", "send", "--from", "hermes",
+            self.tmp_path, "dispatch", "send", "--from", "human",
             "--to", "orchestrator", "--subject", "kickoff", "--no-wake",
             "Start the smoke task.",
         ).stdout)
@@ -126,10 +126,10 @@ class DispatchCliTests(unittest.TestCase):
         self.assertEqual(shown["subject"], "kickoff")
 
     def test_dispatch_log_is_human_readable_feed(self):
-        run_cmd(self.tmp_path, "dispatch", "send", "--from", "hermes",
+        run_cmd(self.tmp_path, "dispatch", "send", "--from", "human",
                 "--to", "orchestrator", "--subject", "kickoff", "--no-wake", "go")
         out = run_cmd(self.tmp_path, "dispatch", "log").stdout
-        self.assertIn("hermes", out)
+        self.assertIn("human", out)
         self.assertIn("orchestrator", out)
         self.assertIn("kickoff", out)
 

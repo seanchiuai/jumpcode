@@ -307,7 +307,7 @@ git add -A && git commit -m "feat(dispatch): replace mail/run/task/report with d
 ```bash
 exec python3 "$DIR/jumpcode" dispatch log "${1:-40}"
 ```
-**Step 2:** `ask` → make it a thin alias for `dispatch send --from ${JUMPCODE_FROM:-hermes} --to $1` (wake included by default), or delete it and standardize on `dispatch`. Recommended: delete `ask`; the dispatch verb now covers it.
+**Step 2:** `ask` → make it a thin alias for `dispatch send --from ${JUMPCODE_FROM:-human} --to $1` (wake included by default), or delete it and standardize on `dispatch`. Recommended: delete `ask`; the dispatch verb now covers it.
 
 **Step 3:** `start-webapp` → the initial `send_initial` prompts should point agents at the **shared protocol + their charter** (Task 7 paths) and tell them to read the **tracker (GitHub issues)**, not the retired `task`/`status` registry. Replace the per-pane send text accordingly. Keep the iTerm-open + monitor window. Confirm it still kills/relaunches cleanly.
 
@@ -369,7 +369,7 @@ git add -A && git commit -m "docs: reconcile all prose with grilled design"
 
 **Why:** Orchestrator + leads must reach the tracker. The jumpcode doesn't call the tracker; the *panes'* Claude Code must have the tracker MCP. Sean previously did not want `.mcp.json` in the repo — so prefer user-level config.
 
-**Step 1:** Check whether `claude` panes already see tracker tools (Hermes has it). Launch one throwaway pane and inspect, or check `~/.claude` / project MCP config. Document the finding.
+**Step 1:** Check whether `claude` panes already see tracker tools (the operator has it). Launch one throwaway pane and inspect, or check `~/.claude` / project MCP config. Document the finding.
 
 **Step 2:** If not available, decide with Sean: user-level MCP (`~/.claude`) vs a repo `.mcp.json` (he disliked this). Configure the chosen one.
 
@@ -391,9 +391,9 @@ tmux list-panes -t macbook-webapp:roles -F '#{@jumpcode_role}'
 ```
 Expected: orchestrator / frontend-lead / backend-lead / qa-lead
 
-**Step 4: Drive the loop.** From Hermes:
+**Step 4: Drive the loop.** From Sean:
 ```bash
-./.jumpcode/bin/dispatch send --from hermes --to orchestrator --subject "smoke" "Create a tracker issue for a trivial task, dispatch backend-lead to do it, and report back."
+./.jumpcode/bin/dispatch send --from human --to orchestrator --subject "smoke" "Create a tracker issue for a trivial task, dispatch backend-lead to do it, and report back."
 ```
 Watch: orchestrator pane wakes → dispatches backend-lead → backend-lead pane wakes → does it → reports (dispatch + tracker) → orchestrator integrates. Confirm each `wake` landed and each step appears in `dispatch log` + the tracker.
 

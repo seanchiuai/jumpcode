@@ -6,7 +6,7 @@ role files only add what is specific to a role. Canonical terms live in
 
 ## The one mental model
 
-> Human + Hermes drive the **orchestrator**, which commands its **team leads**, which
+> The Human (Sean) drives the **orchestrator**, which commands its **team leads**, which
 > invoke general **subagents** as a tool. **Projects and tasks live in GitHub issues.** The
 > jumpcode only moves messages between visible panes and remembers what was said.
 
@@ -101,16 +101,15 @@ $JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator \
 ## Topology — who may talk to whom (ADR 0001)
 
 ```text
-Human  -> orchestrator, any team lead          (Human can type into any pane)
-Hermes -> orchestrator only
-orchestrator -> any team lead, Human, Hermes
+Human (Sean) -> orchestrator, any team lead    (Human can type into any pane)
+orchestrator -> any team lead, Human (Sean)    (reports go to Sean only)
 team lead    -> orchestrator only
 team lead    -> its own subagents (a tool, not a pane)
 ```
 
 - **No lead ↔ lead.** To reach another lead, send the orchestrator a dispatch asking it
   to **relay**. The orchestrator decides whether to forward.
-- Neither Human nor Hermes addresses subagents directly.
+- The Human (Sean) never addresses subagents directly.
 
 ## Continuity: always fresh (ADR 0004)
 
@@ -124,7 +123,7 @@ $JUMPCODE_HOME/bin/dispatch log 40
 
 ## Health checks & subagent visibility
 
-Hermes or the orchestrator can snapshot the whole team at any time:
+Sean or the orchestrator can snapshot the whole team at any time:
 
 ```bash
 $JUMPCODE_HOME/bin/health          # per-role: alive/stopped · working/waiting/idle · last-seen · subagents

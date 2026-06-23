@@ -1,6 +1,6 @@
 # Jumpcode Instructions
 
-The local operator manual for Hermes/MacBook and any visible Claude Code pane (the
+The local operator manual for Sean and any visible Claude Code pane (the
 orchestrator and team leads). Canonical terms live in [`CONTEXT.md`](CONTEXT.md); the
 reasoning lives in [`docs/adr/`](docs/adr/); the shared interaction rules for leads live
 in [`roles/_PROTOCOL.md`](roles/_PROTOCOL.md).
@@ -74,8 +74,8 @@ The single verb is `dispatch`:
 A dispatch identity is **(session, role)**, not a bare role name: concurrent workspaces
 (e.g. `macbook-ambassador`, `macbook-heatmap`, `macbook-seo`) all have a `backend-lead`,
 and they are *different agents*. Every `dispatch send` tags its event with the sender's
-tmux session (from `$JUMPCODE_TMUX_SESSION`, set in every pane; external senders like
-Hermes set it or pass `--session <name>`). `inbox`, `log`, `status` (open-loop pairing)
+tmux session (from `$JUMPCODE_TMUX_SESSION`, set in every pane; an external sender
+sets it or passes `--session <name>`). `inbox`, `log`, `status` (open-loop pairing)
 and `health` (subagents / last-seen) read **only the caller's session's events**. The
 wake likewise resolves panes inside that one session, across all its windows.
 
@@ -106,9 +106,9 @@ full message with `dispatch inbox <role>` / `dispatch show <id>`.
 
 ## Topology
 
-Hub-and-spoke (ADR 0001): Human may type into any pane; Hermes talks only to the
-orchestrator; leads report only to the orchestrator and request a **relay** to reach
-another lead. Neither Human nor Hermes addresses subagents directly.
+Hub-and-spoke (ADR 0001): Sean (the Human) may type into any pane; leads report only to
+the orchestrator and request a **relay** to reach another lead. The Human (Sean) never
+addresses subagents directly.
 
 ## Continuity
 

@@ -30,7 +30,7 @@ DISPATCH_KINDS = ["request", "reply", "report-done", "report-blocked", "notice"]
 
 ROLE_ID_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 KNOWN_RUNTIMES = {"claude", "codex"}
-RESERVED_NON_ROLES = {"hermes", "human"}
+RESERVED_NON_ROLES = {"human"}
 
 
 class RoleDiscoveryError(ValueError):
@@ -294,7 +294,7 @@ def cmd_recompact(args: argparse.Namespace, home: Path) -> int:
 def resolve_session() -> str:
     """The tmux session whose panes we wake.
 
-    Prefer an explicit JUMPCODE_TMUX_SESSION (set by external senders like Hermes). When
+    Prefer an explicit JUMPCODE_TMUX_SESSION (set by an external sender). When
     unset but we are running INSIDE tmux (an agent in a pane dispatching a sibling),
     fall back to the current session so agent-to-agent wake works with no env wiring.
     """
@@ -1175,7 +1175,7 @@ def cmd_health(args: argparse.Namespace, home: Path) -> int:
 
     # Roles that have appeared in the dispatch log but have no live pane right now.
     for role in sorted(r for r in seen if r not in seen_roles
-                       and r not in ("hermes", "human")):
+                       and r not in RESERVED_NON_ROLES):
         agents.append({
             "role": role, "pane": None, "alive": False, "command": None,
             "runtime": None,

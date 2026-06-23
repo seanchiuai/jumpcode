@@ -28,7 +28,7 @@ role is required; any number/mix of leads is allowed. `workspace.json` is settin
 ## Topology
 
 ```text
-You / Hermes
+You (Sean)
   -> 🧭 orchestrator              full-height right pane; the only relay
       -> <leads>                  left columns, one visible pane each
           -> subagents            invoked by a lead as a tool (not panes)
@@ -48,4 +48,4 @@ JUMPCODE_WORKSPACE=example ./.jumpcode/bin/start-webapp
 
 Panes launch fresh with no session resume (ADR 0004); each reorients from its charter,
 the shared protocol, GitHub issues, and the dispatch log (`bin/dispatch log 40`). Give the
-orchestrator a goal with `bin/dispatch send --from hermes --to orchestrator …`.
+orchestrator a goal with `bin/dispatch send --from human --to orchestrator …`.

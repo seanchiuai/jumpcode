@@ -176,7 +176,7 @@ You own watching your leads — do not assume a dispatched task is progressing o
   "status? continue/retry <T>"`. If it still fails after ~2 nudges, or the problem is
   non-transient (auth/quota exhausted, crashed pane, a bug in the jumpcode CLI itself),
   **escalate to Sean** with the diagnosis you read from the pane. Do **not** auto-answer
-  permission dialogs, respawn panes, or edit the jumpcode tooling — that is Hermes's job.
+  permission dialogs, respawn panes, or edit the jumpcode tooling — that is Sean's job.
 ```
 
 **Step 2:** In `.jumpcode/roles/_PROTOCOL.md`, under the "Reporting" area (or near the topology section), add one line so leads know they may be peeked/re-pinged:
@@ -242,7 +242,7 @@ JUMPCODE_TMUX_SESSION=macbook-webapp ./.jumpcode/bin/peek nope; echo "exit=$?"
 Expected: stderr `peek: no pane for role 'nope' ...`, `exit=1`.
 
 **Step 4 (optional, full loop):** Dispatch the orchestrator to exercise it:
-`dispatch send --from hermes --to orchestrator "peek backend-lead and tell me its current state."` Confirm the orchestrator runs `peek` and reports the state.
+`dispatch send --from human --to orchestrator "peek backend-lead and tell me its current state."` Confirm the orchestrator runs `peek` and reports the state.
 
 ---
 

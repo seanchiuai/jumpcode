@@ -227,7 +227,7 @@ order = list(prompts.keys()) + list(ws.get("default_participants", []))
 seen = set()
 fb = 0
 for role in order:
-    if role in ("hermes", "human", "orchestrator") or role in seen:
+    if role in ("human", "orchestrator") or role in seen:
         continue
     seen.add(role)
     em = emojis.get(role)

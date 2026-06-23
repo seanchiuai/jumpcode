@@ -24,10 +24,10 @@ each piece of this design:
 | hook/event-driven state (deferred, below) | **tmai** `attention: started\|halted\|completed` via runtime hooks (no polling) |
 
 What is genuinely *ours* and absent from all of them: the coordination layer —
-**external-tracker-as-system-of-record, the dispatch log, Hermes, hub-and-spoke charters, and
+**external-tracker-as-system-of-record, the dispatch log, hub-and-spoke charters, and
 `@jumpcode_role` wake targeting**. That is why we **extend our launcher rather than adopt
 one of these tools**: they are worktree-per-task TUIs with their own UX; bolting our
-tracker/dispatch/Hermes model onto Claude Squad is more friction than ~30 lines in
+tracker/dispatch model onto Claude Squad is more friction than ~30 lines in
 `start-webapp`.
 
 ## Decision

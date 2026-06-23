@@ -2,13 +2,13 @@
 
 # Jumpcode — Code Audit & Roadmap
 
-Date: 2026-06-06. Author: Hermes (dev takeover). Status: review only, no system changes made.
+Date: 2026-06-06. Author: dev-takeover agent. Status: review only, no system changes made.
 
 ## Summary
 
 The jumpcode is well-built: a clean ~446-line single-file Python core (`bin/jumpcode`), event-sourced append-only JSONL, deterministic state reconstruction, thin bash wrappers, 5 passing tests. Design discipline is good (mail = source of truth; no daemon/db/cloud; only DONE/BLOCKED reports in v1).
 
-**Proven strength — continuity works.** The recurring pain across every session is "I lost the agent I was working with." This system exists to survive that, and it does: full project state (runs, tasks, mail, reports) was rebuilt from disk + the Hermes session DB during this takeover with nothing lost. That is the system's most important property and it is solid.
+**Proven strength — continuity works.** The recurring pain across every session is "I lost the agent I was working with." This system exists to survive that, and it does: full project state (runs, tasks, mail, reports) was rebuilt from disk + the operator session DB during this takeover with nothing lost. That is the system's most important property and it is solid.
 
 ## The #1 issue: no working agent-wake path (likely-broken live loop)
 

@@ -11,7 +11,7 @@ conflicts.
 
 ## The one mental model
 
-> Human + Hermes drive the **orchestrator**, which commands its **team leads**, which
+> The Human (Sean) drives the **orchestrator**, which commands its **team leads**, which
 > invoke general **subagents** as a tool. **Projects and tasks live in GitHub issues.** The
 > jumpcode only moves messages between visible panes and remembers what was said.
 
@@ -21,7 +21,7 @@ A **dispatch** (ADR 0002) is one directed message that does two things at once:
 
 - **Delivered live** — a prompt is injected ("wake") into the recipient's tmux pane,
   targeted by its stable `@jumpcode_role` option, so the agent gets to work immediately.
-- **Appended to the durable dispatch log** — so a restarted agent, or Human/Hermes, can
+- **Appended to the durable dispatch log** — so a restarted agent, or Sean, can
   reconstruct what was asked and what happened.
 
 There is a single CLI verb, `dispatch`:
@@ -86,15 +86,15 @@ and update them via the `gh` CLI. The jumpcode keeps **no** local copy of projec
 Role panes are discovered from prompt folders, not roster JSON. Central `$JUMPCODE_HOME/roles` is the base set; a repo may add `$WORKSPACE_ROOT/.jumpcode/roles` files that overlay central prompts by canonical role id. A repo-local `_PROTOCOL.md` overrides the central protocol when present; otherwise the central `_PROTOCOL.md` is used. `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and must not contain team roster maps.
 
 - **Orchestrator** — one per workspace, the single accountable agent; a visible right
-  pane. Receives goals from Human/Hermes, decomposes into GitHub issues, commands leads.
+  pane. Receives goals from Sean, decomposes into GitHub issues, commands leads.
 - **Team leads** — durable, repo-specific accountable agents (e.g. frontend-lead,
   backend-lead, qa-lead); visible left panes, launched without `-p`.
 - **Subagents** — general, repo-agnostic Claude Code subagents (e.g. a code reviewer) a
   lead invokes as a tool. Not panes, not an accountability layer.
 
-Topology is hub-and-spoke (ADR 0001): Human may type into any pane (orchestrator or any
-lead); Hermes talks only to the orchestrator; there is no lead↔lead channel — a lead
-asks the orchestrator to **relay**.
+Topology is hub-and-spoke (ADR 0001): Sean (the Human) may type into any pane
+(orchestrator or any lead); there is no lead↔lead channel — a lead asks the orchestrator
+to **relay**.
 
 ## Creating a workspace: the Goal Contract
 

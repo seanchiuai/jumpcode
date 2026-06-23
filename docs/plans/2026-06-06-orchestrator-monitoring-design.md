@@ -53,7 +53,7 @@ Add to `roles/🧭 orchestrator.md` (and a short pointer in `roles/_PROTOCOL.md`
   "status? continue/retry SEA-…"`. If it still fails after ~2 nudges, or the error is
   non-transient (auth/quota exhausted, crashed pane, a bug in the jumpcode CLI itself),
   **escalate to Sean** with the diagnosis you read from the pane. Do **not** auto-answer
-  permission dialogs, respawn panes, or edit the jumpcode tooling (that's Hermes's job).
+  permission dialogs, respawn panes, or edit the jumpcode tooling (that's Sean's job).
 
 ## What we give up (accepted)
 

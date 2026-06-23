@@ -5,21 +5,19 @@ The jumpcode uses a strict hub-and-spoke topology with the orchestrator as the h
 ## The graph
 
 ```
-Human  ⇄  Hermes
-Human  →  Orchestrator,  Team Leads        (human may type into any visible pane)
-Hermes →  Orchestrator                     (NOT leads — Hermes routes through the orchestrator)
-Hermes →  workspace config                 (Hermes is the only actor that edits the system)
-Orchestrator  →  Human, Hermes             (readable output)
-Orchestrator  →  all Team Leads            (commands)
-Team Lead     →  Orchestrator              (reports; may request a relay to another lead)
-Team Lead     ✗  Team Lead                 (no direct channel — use Relay)
-Lead          →  Subagents               (invokes general, repo-agnostic Claude Code subagents)
-Human/Hermes  ✗  Subagents               (never address subagents directly)
+Human (Sean)  →  Orchestrator,  Team Leads   (human may type into any visible pane)
+Human (Sean)  →  workspace config            (the human is the only actor that edits the system)
+Orchestrator  →  Human (Sean)                (readable output; reports go to Sean only)
+Orchestrator  →  all Team Leads              (commands)
+Team Lead     →  Orchestrator                (reports; may request a relay to another lead)
+Team Lead     ✗  Team Lead                   (no direct channel — use Relay)
+Lead          →  Subagents                   (invokes general, repo-agnostic Claude Code subagents)
+Human (Sean)  ✗  Subagents                   (never address subagents directly)
 ```
 
-## Key asymmetry
+## Key point
 
-The **Human** may talk to team leads directly (they are visible panes the human can type into), but **Hermes** may not — Hermes commands only the orchestrator. This keeps the programmatic hierarchy clean (one machine-driven path) while preserving the human's freedom at the visible jumpcode.
+Sean (the Human) is the single actor above the orchestrator: he drives the orchestrator, may talk to any team lead directly (they are visible panes he can type into), and is the only actor that edits the system/config. The orchestrator reports back to Sean only. There is no separate machine-driven orchestration layer above the orchestrator.
 
 ## Relay
 
@@ -27,4 +25,4 @@ There is no lead-to-lead channel. A lead that needs another lead asks the orches
 
 ## Status
 
-Accepted. The current role prompts encode most of this; the CLI does not yet enforce it (routing is advisory). Enforcement, if added, must allow the Human→lead direct path.
+Accepted. The current role prompts encode most of this; the CLI does not yet enforce it (routing is advisory). Enforcement, if added, must allow the Human (Sean)→lead direct path. (Revised 2026-06-23: removed the former external meta-orchestrator layer; Sean is the sole driver above the orchestrator.)
