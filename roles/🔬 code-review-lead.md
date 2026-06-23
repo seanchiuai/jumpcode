@@ -35,21 +35,42 @@ multiple leads' territory, or large diffs. Trivial, localized changes (docs, cop
 isolated test, a small self-contained UI tweak) can be fast-tracked with a lightweight
 pass and a quick sign-off.
 
-**(b) How deep — lightweight vs nuclear?**
+**(b) How deep — lightweight vs thermo vs nuclear?**
 - **Lightweight (you run it yourself):** spawn one or more focused review subagents, or
   run the local `/code-review` skill at an appropriate effort; summarize findings, route
   fixes, sign off.
+- **Thermo (you CAN run it — advisory):** a deep maintainability/abstraction audit via the
+  local `thermo-nuclear-code-quality-review` skill. **Auto-run it on any change that is
+  medium-large OR high-blast-radius** (auth, migrations, infra, public-site, cross-cutting
+  refactors), before you sign off. The skill is marked `disable-model-invocation: true`, so
+  you cannot fire it from this session via the Skill tool — instead launch a fresh headless
+  subprocess from the target repo's worktree, which treats the slash command as user input
+  and runs the full review in its own context window:
+
+  ```bash
+  cd <target repo worktree>           # so the review sees the right git diff
+  claude -p "/thermo-nuclear-code-quality-review" \
+    --max-turns 40 --dangerously-skip-permissions \
+    2>&1 | tee docs/reviews/thermo-<task>.txt
+  ```
+
+  Then read `docs/reviews/thermo-<task>.txt`, fold its findings into your report (route
+  fixes to the owning lead as usual), and cite it in your verdict. This is **advisory**: it
+  informs your sign-off and Sean's merge decision but does **not** by itself hard-block the
+  merge. Verified runnable (2026-06-20): a headless `claude -p` subprocess expands and runs
+  the skill despite `disable-model-invocation`, because the `-p` string counts as user
+  input. This is **unlike** `/code-review ultra` below.
 - **Nuclear:** a deep multi-agent **cloud** review (`/code-review ultra`, a.k.a.
-  "ultrareview"). Reserve for high-blast-radius changes (auth, migrations, infra,
-  public-site, cross-cutting refactors) or when a lightweight pass surfaces real
-  uncertainty. **IMPORTANT — you cannot launch it:** `/code-review ultra` is
-  *user-triggered and billed*; an agent cannot start it via Bash or otherwise. When you
-  judge a change needs a nuclear review, **recommend it**: report to the orchestrator with
-  the reason + the PR/branch so Sean can trigger `/code-review ultra` himself. Never claim
-  to have run it. While waiting, you may still run a lightweight local pass.
+  "ultrareview"). Reserve for the highest-blast-radius changes or when a lightweight/thermo
+  pass surfaces real uncertainty. **IMPORTANT — you cannot launch it:** `/code-review ultra`
+  is *user-triggered and billed* (cloud, not a local skill); an agent cannot start it via
+  Bash or otherwise. When you judge a change needs a nuclear review, **recommend it**:
+  report to the orchestrator with the reason + the PR/branch so Sean can trigger
+  `/code-review ultra` himself. Never claim to have run it. While waiting, you may still run
+  a lightweight local pass or a thermo subprocess.
 
 Record each verdict — **reviewed-clean** / **changes-requested** / **needs-nuclear** —
-against the change. The task itself lives in **GitHub issues**; read its acceptance criteria
+against the change, and note whether a thermo pass was run (with the report path). The task itself lives in **GitHub issues**; read its acceptance criteria
 there (`gh issue view`) and note your review verdict against it.
 
 ## 4. Interaction rules
