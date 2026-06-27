@@ -132,6 +132,33 @@ def discover_roles(home: Path, workspace: str) -> Dict[str, Any]:
     if "orchestrator" not in merged:
         raise RoleDiscoveryError("missing required role prompt for canonical id 'orchestrator'")
 
+    # Decide which discovered roles actually launch. There are NO pre-generated leads:
+    #   - orchestrator       — always required, always launches.
+    #   - repo-local overlay — every role the workspace authored in its own
+    #                          <workspace_root>/.jumpcode/roles/*.md launches automatically;
+    #                          writing the charter IS the opt-in.
+    #   - central base leads — RECOMMENDATIONS only. They sit in the central roles/ dir as
+    #                          suggestions and launch solely when named in 'enabled_roles'.
+    # So a bare workspace (no overlay, no enabled_roles) launches the orchestrator alone.
+    # A central lead that a local file overrides counts as repo-local (the override wins),
+    # so it launches without needing to be re-listed in enabled_roles.
+    enabled = settings.get("enabled_roles")
+    if enabled is None:
+        enabled = []
+    if not isinstance(enabled, list) or not all(isinstance(r, str) for r in enabled):
+        raise RoleDiscoveryError("workspace setting 'enabled_roles' must be a list of role ids")
+    enabled_ids = {str(r) for r in enabled}
+    unknown = sorted(enabled_ids - merged.keys())
+    if unknown:
+        raise RoleDiscoveryError(
+            f"enabled_roles references unknown role(s): {', '.join(unknown)}"
+        )
+    launch = {
+        rid for rid, role in merged.items()
+        if rid == "orchestrator" or role.get("_source") == "repo-local" or rid in enabled_ids
+    }
+    merged = {rid: role for rid, role in merged.items() if rid in launch}
+
     local_protocol = local_roles / "_PROTOCOL.md"
     central_protocol = central_roles / "_PROTOCOL.md"
     if local_protocol.exists():
@@ -253,14 +280,17 @@ def wake_pane(session: str, role: str, text: str) -> bool:
     return False
 
 
-def recompact_pane(session: str, role: str) -> bool:
-    """Type /compact into a role's pane so it compacts on the orchestrator's command.
+def recompact_pane(session: str, role: str, message: str) -> bool:
+    """Compact a lead's pane AND queue a mandatory follow-up the orchestrator must supply.
 
     A Claude pane cannot self-/compact (it is a user keystroke), so the orchestrator drives a
-    lead's compaction through here. No follow-up message is queued: the SessionStart(compact)
-    rehydrate hook restores the lead's identity/protocol and (for leads) makes it announce it
-    is back, so the orchestrator needs nothing more than the keystroke. Returns True if the
-    role's pane was resolved and the keys were sent.
+    lead's compaction through here. The sequence is /compact + Enter, then the follow-up
+    message + Enter: typed while compaction runs, Claude Code holds the message in its input
+    buffer and submits it the instant compaction finishes — so the lead always has a task
+    waiting rather than sitting idle. The brief pause lets /compact register first, so the
+    message lands on a fresh queued line instead of concatenating onto the /compact input.
+    `message` is required by the CLI, so a lead can never be compacted without a follow-up.
+    Returns True if the role's pane was resolved and the keys were sent.
     """
     if not session:
         return False
@@ -278,13 +308,16 @@ def recompact_pane(session: str, role: str) -> bool:
     subprocess.run(["tmux", "send-keys", "-t", pane, "C-u"], check=False)     # clear stale input
     subprocess.run(["tmux", "send-keys", "-t", pane, "--", "/compact"], check=False)
     subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"], check=False)
+    time.sleep(0.6)  # let /compact register before queueing the follow-up
+    subprocess.run(["tmux", "send-keys", "-t", pane, "--", message], check=False)
+    subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"], check=False)
     return True
 
 
 def cmd_recompact(args: argparse.Namespace, home: Path) -> int:
     session = resolve_session()
-    if recompact_pane(session, args.role):
-        print(f"sent /compact to {args.role}")
+    if recompact_pane(session, args.role, args.message):
+        print(f"sent /compact + queued follow-up to {args.role}")
         return 0
     print(f"recompact: could not resolve pane for role '{args.role}' in session '{session}'",
           file=sys.stderr)
@@ -1496,8 +1529,10 @@ def build_parser() -> argparse.ArgumentParser:
     peek.add_argument("role")
     peek.add_argument("lines", nargs="?", type=int, default=50)
 
-    recompact = sub.add_parser("recompact", help="type /compact into a role's pane (orchestrator-driven)")
+    recompact = sub.add_parser("recompact", help="compact a role's pane + queue a follow-up (orchestrator-driven)")
     recompact.add_argument("--role", required=True, help="role whose pane should compact")
+    recompact.add_argument("--message", required=True,
+                           help="follow-up message queued to fire the moment compaction finishes (mandatory)")
 
     fleet = sub.add_parser("fleet", help="live dashboard of all workspaces + activity")
     fleet.add_argument("--json", action="store_true", help="machine-readable dump")

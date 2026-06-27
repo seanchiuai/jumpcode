@@ -125,10 +125,14 @@ signal. When a lead is flagged:
 
 1. Wait until that lead is **idle** (`status` shows no in-flight request, or `health` shows it
    idle) so compaction does not interrupt in-flight work.
-2. `$JUMPCODE_HOME/bin/recompact --role <lead>` — this types `/compact` into its pane.
+2. `$JUMPCODE_HOME/bin/recompact --role <lead> --message "<follow-up>"` — this types `/compact`
+   into the lead's pane **and queues your follow-up message**, which Claude Code fires the
+   instant compaction finishes (compact → Enter → message → Enter). `--message` is
+   **mandatory**: a lead must never be left idle after a compaction, so always hand it its next
+   step (e.g. `"re-read your charter, then report your current open loops and resume #NN"`).
 3. The lead auto-rehydrates (a `SessionStart` hook re-reads its charter + protocol) and sends
    you a `notice` "compaction complete — rehydrated, resuming". **Wait for that notice** before
-   re-dispatching work to it.
+   re-dispatching further work to it.
 
 When **your own** context is flagged, checkpoint open loops to the system of record + dispatch
 log, then `/compact` (or ask Sean). After you compact, the same hook restores your identity and

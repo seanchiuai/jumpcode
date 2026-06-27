@@ -83,7 +83,7 @@ and update them via the `gh` CLI. The jumpcode keeps **no** local copy of projec
 
 ## Roles and topology
 
-Role panes are discovered from prompt folders, not roster JSON. Central `$JUMPCODE_HOME/roles` is the base set; a repo may add `$WORKSPACE_ROOT/.jumpcode/roles` files that overlay central prompts by canonical role id. A repo-local `_PROTOCOL.md` overrides the central protocol when present; otherwise the central `_PROTOCOL.md` is used. `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and must not contain team roster maps.
+Role panes are discovered from prompt folders, not roster JSON. **Only the orchestrator launches by default — there are no pre-generated leads.** Central `$JUMPCODE_HOME/roles` holds *recommended* leads that launch only when a workspace opts them in via `enabled_roles` in `workspace.json`; a repo may also add `$WORKSPACE_ROOT/.jumpcode/roles` charters that launch automatically and overlay central prompts by canonical role id. A repo-local `_PROTOCOL.md` overrides the central protocol when present; otherwise the central `_PROTOCOL.md` is used. `workspace.json` is settings-only (`workspace_root`, `role_runtimes`, `enabled_roles`) and must not contain team roster prompts.
 
 - **Orchestrator** — one per workspace, the single accountable agent; a visible right
   pane. Receives goals from Sean, decomposes into GitHub issues, commands leads.

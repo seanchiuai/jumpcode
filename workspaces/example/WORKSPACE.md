@@ -8,22 +8,27 @@ terms see [`../../CONTEXT.md`](../../CONTEXT.md); for the decisions see
 > Real workspaces are **not** committed to this repo — only this example is. A real
 > workspace's `workspace_root` lives in its own project repo, which carries its own
 > charters under `<workspace_root>/.jumpcode/roles/` (in that repo's git). This repo
-> ships the engine plus an example **base set** of roles and this example config.
+> ships the engine plus a set of **recommended** central roles and this example config.
 
 ## How roles are resolved
 
 `start-webapp` (or `JUMPCODE_WORKSPACE=<name> start-webapp`) calls
-`jumpcode roles discover --workspace <name> --json`. Discovery:
+`jumpcode roles discover --workspace <name> --json`. **Only the orchestrator launches by
+default — there are no pre-generated leads.** Discovery assembles the team from:
 
-1. starts from the central base set in `$JUMPCODE_HOME/roles/*.md`;
-2. overlays any repo-local prompts in `<workspace_root>/.jumpcode/roles/*.md`,
-   matched by **canonical role id** (a repo-local file replaces the central one);
-3. uses the repo-local `_PROTOCOL.md` if present, else the central one.
+1. the **orchestrator** in `$JUMPCODE_HOME/roles/*.md` (always);
+2. the **recommended central leads** beside it, each launching only when the workspace
+   lists it in `enabled_roles` (a list in `workspace.json`);
+3. any **repo-local charters** in `<workspace_root>/.jumpcode/roles/*.md`, which launch
+   automatically and overlay a central role of the same **canonical id** (the repo-local
+   file replaces the central one);
+4. the repo-local `_PROTOCOL.md` if present, else the central one.
 
 Prompt filenames set the pane label and id: `🎨 frontend-lead.md` → pane `🎨 frontend-lead`,
 dispatch id `frontend-lead`. A plain `frontend-lead.md` works too. Only the `orchestrator`
-role is required; any number/mix of leads is allowed. `workspace.json` is settings-only
-(`workspace_root`, `role_runtimes`) — there is no roster JSON to keep in sync.
+role is required; pick any mix of leads via `enabled_roles` + overlay charters.
+`workspace.json` is settings-only (`workspace_root`, `role_runtimes`, `enabled_roles`) —
+there is no roster JSON to keep in sync.
 
 ## Topology
 

@@ -58,6 +58,8 @@ class RoleDiscoveryTests(unittest.TestCase):
         self.seed_minimal()
         write(self.central_roles / "🎨 frontend-lead.md")
         write(self.central_roles / "backend-lead.md")
+        # central leads are recommendations now — opt them in so they launch
+        self._write_settings(enabled_roles=["frontend-lead", "backend-lead"])
         roles = self.roles_by_id()
         self.assertEqual(roles["frontend-lead"]["display"], "🎨 frontend-lead")
         self.assertEqual(roles["backend-lead"]["display"], "backend-lead")
@@ -119,6 +121,7 @@ class RoleDiscoveryTests(unittest.TestCase):
         settings.write_text(json.dumps({
             "workspace_root": str(self.workspace_root),
             "role_runtimes": {"backend-lead": "codex"},
+            "enabled_roles": ["backend-lead"],  # central lead must be opted in to launch
         }), encoding="utf-8")
         roles = self.roles_by_id()
         self.assertEqual(roles["backend-lead"]["runtime"], "codex")
@@ -149,6 +152,66 @@ class RoleDiscoveryTests(unittest.TestCase):
         r = self.run_discover(check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("role_runtimes references unknown role 'missing-lead'", r.stderr)
+
+    def _write_settings(self, **extra):
+        settings = self.home / "workspaces" / self.workspace / "workspace.json"
+        body = {"workspace_root": str(self.workspace_root), "role_runtimes": {}}
+        body.update(extra)
+        settings.write_text(json.dumps(body), encoding="utf-8")
+
+    def _seed_full_base(self):
+        self.seed_minimal()
+        write(self.central_roles / "backend-lead.md")
+        write(self.central_roles / "🎨 frontend-lead.md")
+        write(self.central_roles / "✅ qa-lead.md")
+
+    def test_central_leads_are_recommendations_default_orchestrator_only(self):
+        # No overlay, no enabled_roles => the central base leads are suggestions only,
+        # so a bare workspace launches the orchestrator alone (no pre-generated leads).
+        self._seed_full_base()
+        roles = self.roles_by_id()
+        self.assertEqual(set(roles), {"orchestrator"})
+
+    def test_enabled_roles_opts_in_central_leads(self):
+        self._seed_full_base()
+        self._write_settings(enabled_roles=["backend-lead", "qa-lead"])
+        roles = self.roles_by_id()
+        self.assertEqual(set(roles), {"orchestrator", "backend-lead", "qa-lead"})
+
+    def test_enabled_roles_always_includes_orchestrator(self):
+        self._seed_full_base()
+        self._write_settings(enabled_roles=["backend-lead"])
+        roles = self.roles_by_id()
+        self.assertIn("orchestrator", roles)
+        self.assertEqual(set(roles), {"orchestrator", "backend-lead"})
+
+    def test_enabled_roles_empty_means_orchestrator_only(self):
+        self._seed_full_base()
+        self._write_settings(enabled_roles=[])
+        roles = self.roles_by_id()
+        self.assertEqual(set(roles), {"orchestrator"})
+
+    def test_repo_local_overlay_leads_auto_launch_without_opt_in(self):
+        # A lead the workspace authored in its own overlay launches automatically; the
+        # central base leads beside it stay dormant unless listed in enabled_roles.
+        self._seed_full_base()  # central backend/frontend/qa (recommendations)
+        write(self.local_roles / "🔥 heatmap-expert.md", "specialist")
+        roles = self.roles_by_id()
+        self.assertEqual(set(roles), {"orchestrator", "heatmap-expert"})
+
+    def test_enabled_roles_unknown_role_failure(self):
+        self._seed_full_base()
+        self._write_settings(enabled_roles=["backend-lead", "nope-lead"])
+        r = self.run_discover(check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("enabled_roles references unknown role(s): nope-lead", r.stderr)
+
+    def test_enabled_roles_invalid_type_failure(self):
+        self._seed_full_base()
+        self._write_settings(enabled_roles="backend-lead")
+        r = self.run_discover(check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("must be a list of role ids", r.stderr)
 
 
 if __name__ == "__main__":

@@ -70,14 +70,22 @@ Create a TodoWrite item per step and do them in order.
      "title": "<Human-facing goal label for the orchestrator pane border>",
      "_comment": "<durable description: goal, final state, repo+worktree, session, system of record, team>",
      "workspace_root": "<repo>/.worktrees/<slug>",
-     "role_runtimes": { "orchestrator": "claude", "backend-lead": "claude", "...": "claude" }
+     "enabled_roles": ["backend-lead", "qa-lead"],
+     "role_runtimes": { "backend-lead": "claude" }
    }
    ```
-   `role_runtimes` keys must be the central base set you keep plus any overlay leads. Default
-   runtime `claude` (a lead can be `codex`, but codex is laggy for jumpcode).
+   **There are no pre-generated leads** — only the orchestrator launches by default. Pick the
+   team deliberately:
+   - **`enabled_roles`** opts in the *recommended* central leads (backend/frontend/qa/devops/
+     code-review) you actually want. Omit it (or leave it `[]`) and the workspace runs the
+     orchestrator alone. Only list what the goal needs.
+   - **Overlay charters** (step 7) launch automatically — you don't list those in `enabled_roles`.
 
-7. **Add role overlays** in `<worktree>/.jumpcode/roles/` (overlay overrides central by role id;
-   it can ADD or OVERRIDE but cannot subtract a central basic). Two common cases:
+   `role_runtimes` keys must be roles that actually launch (an `enabled_roles` entry or an
+   overlay lead). Default runtime `claude` (a lead can be `codex`, but codex is laggy for jumpcode).
+
+7. **Add role overlays** in `<worktree>/.jumpcode/roles/` (an overlay charter launches
+   automatically and overrides a central lead of the same id). Two common cases:
    - **System-of-record override** → a *thin* `🧭 orchestrator.md` that says "follow the central
      charter at `$JUMPCODE_HOME/roles/🧭 orchestrator.md` EXCEPT: system of record is <the
      alternate tracker>, not GitHub issues; ignore the GitHub-issues line in the launch prompt."
@@ -91,7 +99,8 @@ Create a TodoWrite item per step and do them in order.
    ./.jumpcode/bin/jumpcode roles discover --workspace <slug>
    ```
    Confirm: workspace_root is the worktree, the orchestrator resolves to your overlay (if any),
-   every expected lead appears, and the protocol resolves. Fix mismatches before launch.
+   every expected lead appears (each `enabled_roles` entry + every overlay charter — and
+   *nothing else*), and the protocol resolves. Fix mismatches before launch.
 
 9. **Launch the grid:**
    ```bash

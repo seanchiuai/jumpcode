@@ -20,23 +20,28 @@ is woken automatically. Send messages with $JUMPCODE_BIN/dispatch send --from $r
 ```
 
 The roles launched are the validated discovery result from
-`jumpcode roles discover --workspace <name> --json`. For this example base set that is:
+`jumpcode roles discover --workspace <name> --json`. **Only the orchestrator launches by
+default — there are no pre-generated leads.** The recommended central leads each launch only
+when the workspace opts them in via `enabled_roles`:
 
 ```text
-🧭 orchestrator.md     full-height right pane; dispatch id: orchestrator
-🎨 frontend-lead.md    lead pane; dispatch id: frontend-lead
-🛠 backend-lead.md     lead pane; dispatch id: backend-lead
-✅ qa-lead.md          lead pane; dispatch id: qa-lead
-🚀 devops-lead.md      lead pane; dispatch id: devops-lead
+🧭 orchestrator.md     full-height right pane; dispatch id: orchestrator  (always)
+🎨 frontend-lead.md    recommended lead; launches when "frontend-lead" ∈ enabled_roles
+🛠 backend-lead.md     recommended lead; launches when "backend-lead"  ∈ enabled_roles
+✅ qa-lead.md          recommended lead; launches when "qa-lead"       ∈ enabled_roles
+🚀 devops-lead.md      recommended lead; launches when "devops-lead"   ∈ enabled_roles
+🔬 code-review-lead.md recommended lead; launches when "code-review-lead" ∈ enabled_roles
 ```
 
 A workspace adds specialist leads (e.g. `🔥 heatmap-expert.md`) by dropping prompt files
-into its own `<workspace_root>/.jumpcode/roles/` overlay — they appear automatically.
+into its own `<workspace_root>/.jumpcode/roles/` overlay — those launch automatically,
+no `enabled_roles` entry needed.
 
-Discovery uses central `$JUMPCODE_HOME/roles` as the base set, then overlays repo-local
-`$WORKSPACE_ROOT/.jumpcode/roles` prompts by canonical role id; a repo-local
-`_PROTOCOL.md` overrides central when present. `workspace.json` stays settings-only
-(`workspace_root`, `role_runtimes`) and never carries a roster. This is intentional:
+Discovery always launches the central `orchestrator`, adds the recommended central leads
+named in `enabled_roles`, then overlays repo-local `$WORKSPACE_ROOT/.jumpcode/roles`
+charters (which launch automatically) by canonical role id; a repo-local `_PROTOCOL.md`
+overrides central when present. `workspace.json` stays settings-only (`workspace_root`,
+`role_runtimes`, `enabled_roles`) and never carries roster prompts. This is intentional:
 repo-specific system prompts live in the project repo while the Jumpcode binaries/state
 stay shared. Each agent reorients from durable sources — its charter, the shared protocol,
 GitHub issues, and the dispatch log (`$JUMPCODE_BIN/dispatch log 40`) — and waits to be woken by a

@@ -46,7 +46,7 @@ The first configured workspace is `webapp`:
 .jumpcode/workspaces/webapp/LAUNCH_PROMPTS.md
 ```
 
-Roles are thin **charters** plus one shared protocol. `start-webapp` consumes the centralized discovery JSON: central `$JUMPCODE_HOME/roles` is the base set, repo-local `$WORKSPACE_ROOT/.jumpcode/roles` overlays prompts by canonical role id, and a repo-local `_PROTOCOL.md` overrides central only when present. Adding/removing a `*.md` charter adds/removes a lead; `workspace.json` is settings-only (`workspace_root`, `role_runtimes`) and contains no roster maps.
+Roles are thin **charters** plus one shared protocol. `start-webapp` consumes the centralized discovery JSON. **Only the orchestrator launches by default — no pre-generated leads.** Central `$JUMPCODE_HOME/roles` holds *recommended* leads (opt in per-workspace via `enabled_roles`); repo-local `$WORKSPACE_ROOT/.jumpcode/roles` charters launch automatically and overlay prompts by canonical role id; a repo-local `_PROTOCOL.md` overrides central only when present. Adding/removing an overlay `*.md` charter adds/removes a lead; `workspace.json` is settings-only (`workspace_root`, `role_runtimes`, `enabled_roles`) and contains no roster prompts.
 
 ```text
 .jumpcode/roles/_PROTOCOL.md
