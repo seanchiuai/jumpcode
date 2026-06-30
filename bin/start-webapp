@@ -302,11 +302,15 @@ tmux set-option -w -t "$SESSION:roles" pane-border-status top >/dev/null
 tmux set-option -w -t "$SESSION:roles" pane-border-format ' #[bold,fg=cyan]#{@role} #[default]' >/dev/null
 
 # Monitor window: logs/status are available but do not steal space from role panes.
-tmux new-window -d -t "$SESSION" -n monitor -c "$ROOT" "$feed_cmd"
-tmux split-window -t "$SESSION:monitor" -h -c "$ROOT" "$status_cmd"
-tmux select-layout -t "$SESSION:monitor" even-horizontal >/dev/null
-tmux select-pane -t "$SESSION:monitor.0" -T feed
-tmux select-pane -t "$SESSION:monitor.1" -T status
+# Best-effort: the monitor is non-essential, so a failed split or a status pane that
+# exits before we can label it must NEVER abort the launch (set -e). Previously an
+# unguarded `select-pane monitor.1` on a vanished status pane raised "can't find pane: 1"
+# and killed the whole launch before send_initial / reconcile / the iTerm window opened.
+tmux new-window -d -t "$SESSION" -n monitor -c "$ROOT" "$feed_cmd" 2>/dev/null || true
+tmux split-window -t "$SESSION:monitor" -h -c "$ROOT" "$status_cmd" 2>/dev/null || true
+tmux select-layout -t "$SESSION:monitor" even-horizontal >/dev/null 2>&1 || true
+tmux select-pane -t "$SESSION:monitor.0" -T feed 2>/dev/null || true
+tmux select-pane -t "$SESSION:monitor.1" -T status 2>/dev/null || true
 
 # Default the user-facing window to the clean role grid.
 tmux select-window -t "$SESSION:roles"
