@@ -565,17 +565,22 @@ FLEET_IDLE_SECS = 600  # all panes idle AND no dispatch newer than this -> "idle
 def classify_workspace(w: Dict[str, Any]) -> str:
     """Pure status classifier for one workspace. First match wins:
     error -> active -> idle -> past. Input keys:
-      alive (bool), agents (list of {state}), last_dispatch_age_secs (int|None),
+      alive (bool), attached (bool), agents (list of {state}),
       stale_open_loops (int), config_ok (bool).
+
+    'active' is driven by tmux ground truth, NOT the dispatch log: a workspace is
+    active if a window is currently attached to it OR any pane is doing work
+    (working/waiting). Dispatch-log recency is informational only (the `last`
+    column) and never decides active vs idle — a hand-driven session with no
+    dispatch traffic was wrongly read as idle under the old recency rule.
     """
     if not w["alive"]:
         return "past"
     # error: only meaningful while alive
     if not w["config_ok"] or w["stale_open_loops"] > 0:
         return "error"
-    age = w["last_dispatch_age_secs"]
-    recent = age is not None and age < FLEET_IDLE_SECS
-    if any(a.get("state") in ("working", "waiting") for a in w["agents"]) or recent:
+    working = any(a.get("state") in ("working", "waiting") for a in w["agents"])
+    if working or w.get("attached"):
         return "active"
     return "idle"
 
@@ -1126,20 +1131,21 @@ def gather_fleet(home: Path) -> List[Dict[str, Any]]:
         manifest = load_manifest(home, workspace) or {}
         session = manifest.get("session") or ""
         alive = bool(session) and _tmux_session_alive(session)
+        attached = alive and _window_open(session)
         agents = scan_session(session, {}) if alive else []
         ws_dispatches = [d for d in all_dispatches if d.get("session") == session]
         last_ts = max((d.get("created_at") or "" for d in ws_dispatches), default="")
-        age = _age_secs(last_ts) if last_ts else None
         stale = fleet_silent_loops(ws_dispatches)
         config_ok = workspace_config_ok(home, workspace, manifest)
         status = classify_workspace({
-            "alive": alive, "agents": agents, "last_dispatch_age_secs": age,
+            "alive": alive, "attached": attached, "agents": agents,
             "stale_open_loops": stale, "config_ok": config_ok,
         })
         rows.append({
             "workspace": workspace, "session": session, "status": status,
-            "alive": alive, "agents": agents, "config_ok": config_ok,
-            "stale_open_loops": stale, "last_dispatch": last_ts or None,
+            "alive": alive, "attached": attached, "agents": agents,
+            "config_ok": config_ok, "stale_open_loops": stale,
+            "last_dispatch": last_ts or None,
         })
     return rows
 
@@ -1167,14 +1173,16 @@ def _fleet_line(row: Dict[str, Any]) -> str:
     total = len(row["agents"])
     panes = f"{live}/{total} panes" if total else "—"
     last = _age_str(row["last_dispatch"]) if row["last_dispatch"] else "—"
+    win = "attached" if row.get("attached") else "detached"
     note = ""
     if row["status"] == "error":
         note = "config!" if not row["config_ok"] else f"{row['stale_open_loops']} silent loop(s)"
-    return f"{g}  {ws:<14} {panes:<12} last {last:<7} {note}".rstrip()
+    return f"{g}  {ws:<14} {panes:<12} {win:<9} last {last:<7} {note}".rstrip()
 
 
 def _fleet_sorted(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(rows, key=lambda r: (_FLEET_ORDER.get(r["status"], 9),
+                                       0 if r.get("attached") else 1,
                                        -(_age_secs(r["last_dispatch"]) or 1 << 30)))
 
 

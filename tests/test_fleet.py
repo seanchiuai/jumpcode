@@ -16,12 +16,12 @@ spec.loader.exec_module(jumpcode)
 IDLE_SECS = 600  # 10 min
 
 
-def wp(alive, agents=None, last_dispatch_age=None, open_loops=0, config_ok=True):
+def wp(alive, agents=None, attached=False, open_loops=0, config_ok=True):
     """Build the classifier input dict for one workspace."""
     return {
         "alive": alive,
+        "attached": attached,
         "agents": agents or [],
-        "last_dispatch_age_secs": last_dispatch_age,
         "stale_open_loops": open_loops,
         "config_ok": config_ok,
     }
@@ -43,49 +43,45 @@ class ClassifyTests(unittest.TestCase):
     def test_stale_open_loop_is_error(self):
         self.assertEqual(
             jumpcode.classify_workspace(
-                wp(alive=True, open_loops=1, last_dispatch_age=4000)), "error")
+                wp(alive=True, open_loops=1)), "error")
 
     def test_working_pane_is_active(self):
         self.assertEqual(
             jumpcode.classify_workspace(
-                wp(alive=True, agents=[{"state": "working"}, {"state": "idle"}],
-                   last_dispatch_age=9999)), "active")
+                wp(alive=True, agents=[{"state": "working"}, {"state": "idle"}])),
+            "active")
 
-    def test_recent_dispatch_is_active_even_if_all_idle(self):
+    def test_attached_is_active_even_if_all_panes_idle(self):
+        # a window is open on it (you're driving it by hand) -> active, regardless
+        # of dispatch traffic. This is the case the old recency rule got wrong.
         self.assertEqual(
             jumpcode.classify_workspace(
-                wp(alive=True, agents=[{"state": "idle"}],
-                   last_dispatch_age=120)), "active")
+                wp(alive=True, agents=[{"state": "idle"}], attached=True)), "active")
 
-    def test_all_idle_and_quiet_is_idle(self):
+    def test_detached_and_all_idle_is_idle(self):
         self.assertEqual(
             jumpcode.classify_workspace(
                 wp(alive=True, agents=[{"state": "idle"}, {"state": "idle"}],
-                   last_dispatch_age=4000)), "idle")
+                   attached=False)), "idle")
 
-    def test_idle_boundary_just_under_threshold_is_active(self):
+    def test_detached_but_pane_working_is_active(self):
+        # background work with no window open still counts as active
         self.assertEqual(
             jumpcode.classify_workspace(
-                wp(alive=True, agents=[{"state": "idle"}],
-                   last_dispatch_age=IDLE_SECS - 1)), "active")
+                wp(alive=True, agents=[{"state": "working"}], attached=False)),
+            "active")
 
-    def test_idle_boundary_at_threshold_is_idle(self):
+    def test_alive_no_panes_detached_is_idle(self):
+        # session exists but no panes scanned and no window open -> not "active"
         self.assertEqual(
             jumpcode.classify_workspace(
-                wp(alive=True, agents=[{"state": "idle"}],
-                   last_dispatch_age=IDLE_SECS)), "idle")
-
-    def test_alive_no_panes_no_activity_is_idle(self):
-        # session exists but no panes scanned and never any dispatch -> not "active"
-        self.assertEqual(
-            jumpcode.classify_workspace(
-                wp(alive=True, agents=[], last_dispatch_age=None)), "idle")
+                wp(alive=True, agents=[], attached=False)), "idle")
 
     def test_error_wins_over_active(self):
         self.assertEqual(
             jumpcode.classify_workspace(
                 wp(alive=True, agents=[{"state": "working"}],
-                   open_loops=1, last_dispatch_age=4000)), "error")
+                   open_loops=1, attached=True)), "error")
 
 
 class ConfigCheckTests(unittest.TestCase):
@@ -142,11 +138,11 @@ class SilentLoopTests(unittest.TestCase):
 
 
 def row(workspace, status, agents=None, config_ok=True, open_loops=0,
-        last_dispatch=None):
+        last_dispatch=None, attached=False):
     """Build a gathered-fleet row for the renderer (post-classification)."""
     return {"workspace": workspace, "status": status, "agents": agents or [],
             "config_ok": config_ok, "stale_open_loops": open_loops,
-            "last_dispatch": last_dispatch}
+            "last_dispatch": last_dispatch, "attached": attached}
 
 
 class RenderTests(unittest.TestCase):
@@ -184,6 +180,14 @@ class RenderTests(unittest.TestCase):
     def test_error_row_shows_config_note(self):
         line = jumpcode._fleet_line(row("bugsmash", "error", config_ok=False))
         self.assertIn("config!", line)
+
+    def test_attached_row_shows_attached_marker(self):
+        attached = jumpcode._fleet_line(
+            row("seo", "active", agents=[{"alive": True}], attached=True))
+        detached = jumpcode._fleet_line(
+            row("obs", "idle", agents=[{"alive": True}], attached=False))
+        self.assertIn("attached", attached)
+        self.assertIn("detached", detached)
 
     def test_closed_row_omits_panes(self):
         line = jumpcode._fleet_line(row("cleanup", "past"))
