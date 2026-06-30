@@ -377,6 +377,34 @@ done
 # Grid settled: restore normal exit behavior so a later crash is visible to health, not retained forever.
 tmux set-option -w -t "$SESSION:roles" remain-on-exit off >/dev/null 2>&1 || true
 
+# Poisoned-server guard: if every role pane died on startup, the agent runtime couldn't
+# start in this tmux server. The classic cause is an EPERM — the default tmux server was
+# first spawned inside a sandboxed/agent context days ago, so it's seatbelted and a new
+# claude can't sandbox-init (nested sandbox). Don't leave a silent grid of dead panes;
+# surface the diagnosis and the one fix that works (recreate the server from a clean shell).
+_dead=0; _total=0
+while IFS= read -r _d; do _total=$((_total+1)); [[ "$_d" == "1" ]] && _dead=$((_dead+1)); done \
+  < <(tmux list-panes -t "$SESSION:roles" -F '#{pane_dead}' 2>/dev/null)
+if (( _total > 0 && _dead == _total )); then
+  _sample="$(tmux capture-pane -p -t "$SESSION:roles" 2>/dev/null | grep -m1 -i 'EPERM\|error' || true)"
+  {
+    echo ""
+    echo "  ┌─ JUMPCODE LAUNCH FAILED ──────────────────────────────────────────────"
+    echo "  │ All $_total role panes died on startup. The runtime can't start in this"
+    echo "  │ tmux server. Sample: ${_sample:-<no output captured>}"
+    if printf '%s' "$_sample" | grep -qi 'EPERM'; then
+      echo "  │"
+      echo "  │ EPERM = this tmux server is seatbelted (it was first created from a"
+      echo "  │ sandboxed/agent context). New claude processes can't sandbox-init."
+      echo "  │ FIX — recreate the server from a clean terminal (NOT from an agent):"
+      echo "  │     tmux kill-server      # all sessions resume from saved state"
+      echo "  │     PATH=\"/opt/homebrew/bin:\$PATH\" $JUMPCODE_HOME/bin/revive $WORKSPACE"
+    fi
+    echo "  └───────────────────────────────────────────────────────────────────────"
+    echo ""
+  } >&2
+fi
+
 # Record every launched role's claude session id to a durable manifest so the team can be
 # resumed deterministically after a relogin/crash without reverse-engineering transcripts.
 # One file per workspace, overwritten each launch: $JUMPCODE_HOME/state/sessions/<workspace>.json
