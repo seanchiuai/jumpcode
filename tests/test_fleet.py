@@ -189,6 +189,19 @@ class RenderTests(unittest.TestCase):
         self.assertIn("attached", attached)
         self.assertIn("detached", detached)
 
+    def test_broken_attached_is_flagged_do_not_reap(self):
+        # BROKEN + attached = being repaired; must be flagged so a teardown skips it.
+        line = jumpcode._fleet_line(
+            row("ambassador", "error", config_ok=False, attached=True))
+        self.assertIn("config!", line)
+        self.assertIn("DO NOT REAP", line)
+
+    def test_broken_detached_is_not_flagged_in_repair(self):
+        line = jumpcode._fleet_line(
+            row("ambassador", "error", config_ok=False, attached=False))
+        self.assertIn("config!", line)
+        self.assertNotIn("DO NOT REAP", line)
+
     def test_closed_row_omits_panes(self):
         line = jumpcode._fleet_line(row("cleanup", "past"))
         self.assertNotIn("panes", line)

@@ -1177,6 +1177,11 @@ def _fleet_line(row: Dict[str, Any]) -> str:
     note = ""
     if row["status"] == "error":
         note = "config!" if not row["config_ok"] else f"{row['stale_open_loops']} silent loop(s)"
+        # A BROKEN workspace that is ALSO attached is almost always one being actively
+        # repaired (a worktree/config in flux while you fix it), NOT a dead one to reap.
+        # Flag it so it never gets bundled into a teardown — attachment beats BROKEN.
+        if row.get("attached"):
+            note += " — attached, in-repair, DO NOT REAP"
     return f"{g}  {ws:<14} {panes:<12} {win:<9} last {last:<7} {note}".rstrip()
 
 
