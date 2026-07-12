@@ -50,11 +50,21 @@ def role_id_from_stem(stem: str) -> str:
     return stem
 
 
+# Canonical name for the per-effort config dir; the bare "workspaces" name is
+# still honoured as a legacy fallback so older checkouts keep working.
+WORKSPACES_DIRNAME = "jumpcode-workspaces"
+LEGACY_WORKSPACES_DIRNAME = "workspaces"
+
+
 def _workspace_json_candidates(home: Path, workspace: str) -> List[Path]:
-    candidates = [home / "workspaces" / workspace / "workspace.json"]
+    bases = [home]
     if home.name == ".jumpcode":
-        candidates.append(home.parent / "workspaces" / workspace / "workspace.json")
-    return candidates
+        bases.append(home.parent)
+    return [
+        base / dirname / workspace / "workspace.json"
+        for base in bases
+        for dirname in (WORKSPACES_DIRNAME, LEGACY_WORKSPACES_DIRNAME)
+    ]
 
 
 def workspace_json_path(home: Path, workspace: str) -> Path:
@@ -79,7 +89,11 @@ def load_workspace_settings(home: Path, workspace: str) -> Dict[str, Any]:
 
 def resolve_workspace_root(home: Path, workspace: str, settings: Dict[str, Any]) -> Path:
     default_base = home.parent if home.name == ".jumpcode" else home
-    value = settings.get("workspace_root", str(default_base / "workspaces" / workspace))
+    default_root = default_base / WORKSPACES_DIRNAME / workspace
+    legacy_root = default_base / LEGACY_WORKSPACES_DIRNAME / workspace
+    if not default_root.exists() and legacy_root.exists():
+        default_root = legacy_root
+    value = settings.get("workspace_root", str(default_root))
     root = Path(str(value)).expanduser()
     if not root.is_absolute():
         root = default_base / root

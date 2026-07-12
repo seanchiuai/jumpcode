@@ -56,6 +56,8 @@ Create a TodoWrite item per step and do them in order.
    ```bash
    git -C <repo> worktree add <repo>/.worktrees/<slug> -b <slug> <base-branch>
    mkdir -p <repo>/.worktrees/<slug>/.jumpcode/roles   # .jumpcode is git-excluded in the repo
+   # if the repo root has a private (git-excluded) .mcp.json, carry it into the worktree:
+   [ -f <repo>/.mcp.json ] && ln -sf ../../.mcp.json <repo>/.worktrees/<slug>/.mcp.json
    ```
    **Base branch is usually `staging` — but if the work depends on code/config that lives only on
    an unmerged branch (config keys, utils, a sibling feature), cut off THAT branch instead** so the
@@ -64,7 +66,7 @@ Create a TodoWrite item per step and do them in order.
    record the rebase-onto-`staging` follow-up in both `workspace.json` `_comment` and the
    orchestrator overlay so the team rebases once the dependency lands in `staging`.
 
-6. **Write `workspaces/<slug>/workspace.json`** (settings only — there is no roster here):
+6. **Write `jumpcode-workspaces/<slug>/workspace.json`** (settings only — there is no roster here):
    ```json
    {
      "title": "<Human-facing goal label for the orchestrator pane border>",
@@ -74,6 +76,11 @@ Create a TodoWrite item per step and do them in order.
      "role_runtimes": { "backend-lead": "claude" }
    }
    ```
+   **`workspace_root` MUST be a worktree of the target repo — never a path inside
+   workspace-macbook.** Agent panes launch with cwd = `workspace_root`, so this is what makes
+   the team inherit the repo's CLAUDE.md, settings, and plugins (e.g. superpowers, which is
+   deliberately disabled in workspace-macbook) instead of the hub's.
+
    **There are no pre-generated leads** — only the orchestrator launches by default. Pick the
    team deliberately:
    - **`enabled_roles`** opts in the *recommended* central leads (backend/frontend/qa/devops/

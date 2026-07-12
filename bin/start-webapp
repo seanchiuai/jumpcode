@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Nesting-safety: start-webapp may be launched from inside another tmux session
+# (e.g. a Ghostty shell auto-wrapped on the 'wt' socket by ~/.zshrc). Detach from
+# it so every tmux command here targets the DEFAULT server where jumpcode
+# workspaces live, and so `new-session` is not refused by tmux's nest guard
+# ("sessions should be nested with care"). tmux re-sets $TMUX inside each pane it
+# creates, so intra-jumpcode dispatch auto-resolution (which reads $TMUX) is
+# unaffected. start-webapp itself never reads $TMUX.
+unset TMUX
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -d "/Users/seanchiu/Desktop/workspace-macbook" ]]; then
   DEFAULT_ROOT="/Users/seanchiu/Desktop/workspace-macbook"

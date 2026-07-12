@@ -1,0 +1,12 @@
+{
+  "title": "Minds Enterprise Dashboard — spec the PRD (define + plan, no build)",
+  "_comment": "GOAL: properly SPEC the 'Minds Enterprise Dashboard' PRD (Sean Chiu, draft 2026-06-29) — turn the draft into a complete, reviewed spec + technical plan, broken into GitHub issues. THIS IS A DEFINE/SPEC WORKSPACE: hard-pause before ANY implementation (see orchestrator overlay). SCOPE (3 capabilities only): (1) run campaigns from the dashboard incl. reusing past personas/panels ('minds'); (2) embedded context-aware chatbot as the primary interface (kicks off + configures campaigns); (3) MINIMAL ROI display = time-saved + cost-saved per campaign/account. OUT OF SCOPE v1: manual PDF/PPT export, onboarding/daily-check-ins/breakthrough detection, competitive/industry benchmarking, granular roles (flat team access). BAKED-IN ANSWERS to PRD open questions: company context = a long stored free-text block per company that agents + future features read from; ROI baseline = Minds' own default assumption (not customer-provided, not competitive benchmark). FINAL STATE: a documented requirements + architecture spec and a big-picture implementation plan, filed as GitHub issues, with the open questions resolved — and NO code written. SYSTEM OF RECORD: GitHub issues in minds-ai-co/webapp via gh (the default). REPO: /Users/seanchiu/Desktop/webapp (origin minds-ai-co/webapp). WORKTREE: .worktrees/enterprise-dash on branch enterprise-dash (base staging). SESSION: macbook-enterprise-dash. ROSTER: backend-lead + frontend-lead + qa-lead (spec phase; no devops/code-review until a build is approved).",
+  "workspace_root": "/Users/seanchiu/Desktop/webapp/.worktrees/enterprise-dash",
+  "enabled_roles": ["backend-lead", "frontend-lead", "qa-lead"],
+  "role_runtimes": {
+    "orchestrator": "claude",
+    "backend-lead": "claude",
+    "frontend-lead": "claude",
+    "qa-lead": "claude"
+  }
+}

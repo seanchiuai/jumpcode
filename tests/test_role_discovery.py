@@ -54,6 +54,20 @@ class RoleDiscoveryTests(unittest.TestCase):
     def roles_by_id(self):
         return {r["id"]: r for r in json.loads(self.run_discover().stdout)["roles"]}
 
+    def test_jumpcode_workspaces_dir_takes_precedence_over_legacy(self):
+        # setUp writes the config under the legacy "workspaces/" name; a config
+        # under the canonical "jumpcode-workspaces/" name must win over it.
+        self.seed_minimal()
+        new_root = self.tmp / "repo-new"
+        settings = self.home / "jumpcode-workspaces" / self.workspace / "workspace.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(
+            json.dumps({"workspace_root": str(new_root), "role_runtimes": {}}),
+            encoding="utf-8",
+        )
+        write(new_root / ".jumpcode" / "roles" / "🔥 heatmap-expert.md", "overlay")
+        self.assertIn("heatmap-expert", self.roles_by_id())
+
     def test_emoji_and_plain_filenames_parse_to_canonical_ids(self):
         self.seed_minimal()
         write(self.central_roles / "🎨 frontend-lead.md")
