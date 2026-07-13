@@ -145,8 +145,9 @@ orchestrator pane is idle, hand it the mission with the global `/goal <mission>`
 It runs the orchestrator's
 decompose → file-issues → dispatch → integrate → review-gate loop from one mission string,
 checking the charter to know which tracker is in use. Offer it every time; the freeform alternative
-loses the structured loop. The full procedure lives in the **`creating-jumpcode-workspaces`
-skill** (`skills/creating-jumpcode-workspaces/SKILL.md`).
+loses the structured loop. In `workspace-macbook`, the full lifecycle procedure lives in the
+canonical shared **`jumpcode` skill** (`.claude/skills/jumpcode/SKILL.md`, exposed to Codex
+through `.agents/skills/jumpcode`).
 
 ## Continuity: always fresh
 

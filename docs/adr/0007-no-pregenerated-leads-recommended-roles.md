@@ -20,7 +20,7 @@ This also removes the old "the overlay cannot subtract a basic" wart: there is n
 ## Consequences
 
 - **Existing workspaces must declare `enabled_roles`.** A workspace whose `role_runtimes` names leads but omits `enabled_roles` now **fails discovery** (the runtimes reference non-launched roles). The committed `cleanup` and `jumpstudy` workspaces were migrated to `enabled_roles: [all five leads]` to preserve their teams.
-- Workspace creation (`creating-jumpcode-workspaces` skill) now picks the team via `enabled_roles` + overlay charters instead of inheriting all.
+- Workspace creation (the canonical `jumpcode` skill) now picks the team via `enabled_roles` + overlay charters instead of inheriting all.
 - `workspace.json` settings surface is `workspace_root`, `role_runtimes`, `enabled_roles` — still no roster *prompts*.
 
 ## Related
