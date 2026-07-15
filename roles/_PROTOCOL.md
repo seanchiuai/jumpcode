@@ -108,7 +108,7 @@ lands *inside the prompt* — selecting a wrong default or corrupting the modal.
   prompts, do not enter a plan-approval mode, and do not stop on a yes/no confirm. These
   expect a keypress you will never receive.
 - **Permission/approval modals should not appear** — panes launch non-interactive
-  (`--dangerously-skip-permissions` / `--yolo`). If you somehow reach one, treat being
+  (`--permission-mode auto` / `--yolo`). If you somehow reach one, treat being
   stuck on it as a blocker, not a question to wait on.
 - **When you would ask a question, dispatch it instead.** Route it through the channel:
   a lead sends `--kind report-blocked` (or `reply`) to the **orchestrator**; the

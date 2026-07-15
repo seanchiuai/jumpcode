@@ -32,10 +32,10 @@ CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CODEX_BIN="${CODEX_BIN:-/Applications/Codex.app/Contents/Resources/codex}"
 # Per-runtime launch flags appended after the program. BOTH runtimes default to
 # non-interactive so a visible pane never hangs on an approval modal nobody is there to
-# answer: Codex --yolo and Claude --dangerously-skip-permissions. This symmetry matters —
+# answer: Codex --yolo and Claude --permission-mode auto. This symmetry matters —
 # an autonomous lead sitting on a permission prompt blocks itself and jams any dispatch the
 # orchestrator sends into it. Override with CODEX_ARGS='' / CLAUDE_ARGS='' to restore prompting.
-CLAUDE_ARGS="${CLAUDE_ARGS:---dangerously-skip-permissions}"
+CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode auto}"
 CODEX_ARGS="${CODEX_ARGS:---yolo}"
 KILL_EXISTING="${JUMPCODE_KILL_EXISTING:-1}"
 # Resume mode (opt-in; bare start-webapp stays fresh per ADR 0004). When set, every claude
@@ -79,6 +79,14 @@ agent_cmd() {
   [[ -z "$program" ]] && program="$CLAUDE_BIN"   # safety net; preflight already validated
   local rt_args
   rt_args="$(runtime_args "$runtime")"
+  # Per-role codex reasoning effort (data-shaped, like runtime_args): the orchestrator
+  # reasons hard, leads run cheap. Model stays the ~/.codex/config.toml default (gpt-5.6-sol).
+  # Override the tiers with CODEX_EFFORT_ORCH / CODEX_EFFORT_LEAD.
+  if [[ "$runtime" == "codex" ]]; then
+    local effort
+    if [[ "$role" == "orchestrator" ]]; then effort="${CODEX_EFFORT_ORCH:-high}"; else effort="${CODEX_EFFORT_LEAD:-low}"; fi
+    rt_args="$rt_args -c model_reasoning_effort=\"$effort\""
+  fi
   # For claude, pin the session id so every launched role is recorded and deterministically
   # resumable (no reverse-engineering from transcripts). A fresh launch assigns the id with
   # --session-id; the reconcile/respawn pass reconnects to it with --resume.
