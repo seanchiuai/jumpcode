@@ -98,6 +98,28 @@ $JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator \
   "Blocker; why; what you tried; what you need from the orchestrator."
 ```
 
+## Never sit on an interactive prompt — you have no human at your pane
+
+Your pane runs unattended: **no human is watching it to press a key.** Any interactive UI
+that blocks waiting for input will hang you forever, and a dispatch sent into a hung pane
+lands *inside the prompt* — selecting a wrong default or corrupting the modal. So:
+
+- **Never open a blocking question UI.** Do not use interactive multiple-choice question
+  prompts, do not enter a plan-approval mode, and do not stop on a yes/no confirm. These
+  expect a keypress you will never receive.
+- **Permission/approval modals should not appear** — panes launch non-interactive
+  (`--dangerously-skip-permissions` / `--yolo`). If you somehow reach one, treat being
+  stuck on it as a blocker, not a question to wait on.
+- **When you would ask a question, dispatch it instead.** Route it through the channel:
+  a lead sends `--kind report-blocked` (or `reply`) to the **orchestrator**; the
+  orchestrator escalates to **Sean**. State the question and your best-guess default in the
+  dispatch body, then keep going on anything not blocked by it. A dispatch reaches a human;
+  a modal on your pane does not.
+- **Prefer decide-and-note over asking.** If the choice is low-risk and reversible, make the
+  best call, record the assumption in the GitHub issue or your report, and proceed. Reserve
+  dispatched questions for genuine decision gates (scope, product direction, risky/
+  irreversible steps) — the same bar as "Confirm the target before building" above.
+
 ## Topology — who may talk to whom (ADR 0001)
 
 ```text

@@ -30,9 +30,12 @@ JUMPCODE_BIN="$JUMPCODE_HOME/bin"
 SESSION="${JUMPCODE_TMUX_SESSION:-macbook-${JUMPCODE_WORKSPACE:-webapp}}"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CODEX_BIN="${CODEX_BIN:-/Applications/Codex.app/Contents/Resources/codex}"
-# Per-runtime launch flags appended after the program. Codex defaults to --yolo
-# (no approval prompts) so visible panes run unattended; override with CODEX_ARGS=''.
-CLAUDE_ARGS="${CLAUDE_ARGS:-}"
+# Per-runtime launch flags appended after the program. BOTH runtimes default to
+# non-interactive so a visible pane never hangs on an approval modal nobody is there to
+# answer: Codex --yolo and Claude --dangerously-skip-permissions. This symmetry matters —
+# an autonomous lead sitting on a permission prompt blocks itself and jams any dispatch the
+# orchestrator sends into it. Override with CODEX_ARGS='' / CLAUDE_ARGS='' to restore prompting.
+CLAUDE_ARGS="${CLAUDE_ARGS:---dangerously-skip-permissions}"
 CODEX_ARGS="${CODEX_ARGS:---yolo}"
 KILL_EXISTING="${JUMPCODE_KILL_EXISTING:-1}"
 # Resume mode (opt-in; bare start-webapp stays fresh per ADR 0004). When set, every claude

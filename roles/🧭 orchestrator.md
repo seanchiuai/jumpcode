@@ -109,13 +109,32 @@ carry `--reply-to`; otherwise it falls back to matching by task.)
 - **Reading a `peek`:** an advancing spinner/timer = **working** (wait); a static empty
   `❯` prompt = **idle / finished-its-turn** (likely a silent finish — ask it to report);
   an error/quota banner = **errored**; a bare shell prompt (no `claude`/`codex`) =
-  **crashed**.
+  **crashed**; a **question/selection/approval UI on screen** (a numbered choice list, a
+  "Do you want to proceed?" box, a plan-approval or permission modal) = **parked on a
+  prompt** — the lead has trapped itself on interactive input no one will answer.
+- **A parked-on-prompt pane is the one case where you must NOT dispatch into it.** Sending
+  a dispatch types your text *into the modal* and picks a wrong default — jamming the lead
+  worse. Leads are instructed (see `_PROTOCOL.md`) never to open these; if one did, it is a
+  bug to surface, not a question to wait on. **Escalate to Sean immediately** with what the
+  prompt is asking, and leave the pane untouched for him to clear.
 - **Conservative recovery:** for a transient error or a lead idle-without-reporting,
   **re-wake it** — `dispatch send --from orchestrator --to <role> --task <T> "status?
   continue/retry #NN…"`. If it still fails after ~2 nudges, or the failure is
-  non-transient (auth/quota exhausted, crashed pane, a bug in the jumpcode CLI itself),
-  **escalate to Sean** with the diagnosis you read from the pane. Do **not** auto-answer
-  permission dialogs, respawn panes, or edit the jumpcode tooling — that is Sean's job.
+  non-transient (auth/quota exhausted, crashed pane, parked on a prompt, a bug in the
+  jumpcode CLI itself), **escalate to Sean** with the diagnosis you read from the pane. Do
+  **not** auto-answer permission dialogs, respawn panes, or edit the jumpcode tooling —
+  that is Sean's job.
+- **How to escalate so Sean actually sees it.** A report dispatch alone may sit unread. If
+  cmux is running, also fire a desktop alert from your pane — best-effort, never let it
+  block you:
+
+  ```bash
+  cmux notify --title "Orchestrator: <workspace>" \
+    --body "Need you: <one-line reason + which lead/issue>" 2>/dev/null || true
+  ```
+
+  Use this **only at genuine gates** — a blocked/parked lead, a decision Sean owns, a merge
+  held on `needs-nuclear`. Do not notify on routine progress; a noisy channel gets ignored.
 
 ### Compaction management
 
