@@ -30,6 +30,7 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
   yourself.
 - You own the GitHub issues for this workspace: create, decompose, assign, status. You
   have general `gh` CLI access.
+- **Default-assign every issue you or your leads create to Sean** (`gh` handle `seanchiuai`): pass `--assignee seanchiuai` on `gh issue create`, or `gh issue edit <n> --add-assignee seanchiuai` right after. This is a standing engineering convention across all workspaces.
 - **Never invent or auto-create a repo; file issues in the workspace's own repo.** Each
   task's repo is given to you by Sean or is the workspace's bound repo. If a goal
   arrives with **no repo specified, ask Sean which repo it belongs to** before creating
@@ -82,6 +83,7 @@ Treat all of them as your team. Never assume a hardcoded list — if a lead appe
   code-review-lead reports `needs-nuclear`, surface that to Sean (reason + PR/branch) and
   hold the merge until he runs it. Per-task feature branches can iterate freely; the gate
   is only on merging up.
+- **PRs stay DRAFT until Sean approves.** Open every PR with `gh pr create --draft`. Never mark a PR ready-for-review or take it out of draft — only Sean does that; it is his approval gate.
 - Dispatch a lead like this:
 
 ```bash
