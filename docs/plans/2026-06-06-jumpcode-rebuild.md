@@ -399,7 +399,7 @@ Watch: orchestrator pane wakes → dispatches backend-lead → backend-lead pane
 
 **Step 5:** If a wake doesn't land, debug `wake_pane` against live `@jumpcode_role` output (the usual cause is a session-name/`JUMPCODE_TMUX_SESSION` mismatch).
 
-**Step 6: Commit** any fixes, then update `bridgemind-open-thread` memory: live loop verified.
+**Step 6: Commit** any fixes, then update `jumpcode-open-thread` memory: live loop verified.
 
 ---
 

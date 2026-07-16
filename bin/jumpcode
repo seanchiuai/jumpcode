@@ -258,15 +258,49 @@ def _injected_text_present(capture_text: str, text: str) -> bool:
     return bool(needle) and needle in re.sub(r"\s+", "", capture_text)
 
 
+_PROMPT_CHARS = ("❯", "›")  # composer prompt markers: claude / codex
+
+# Keystroke burst size for typing the wake text. A single long send-keys burst trips the
+# TUI's paste detection, and an Enter arriving inside the perceived paste is swallowed
+# (inserted as a newline / dropped) instead of submitting — the staged-"❯ atch" stall.
+# Chunking with pacing keeps the burst under the paste heuristic.
+_TYPE_CHUNK = 192
+
+
+def _staged_remnant(capture_text: str, text: str) -> bool:
+    """True if the composer prompt still holds an unsubmitted remnant of `text`.
+
+    The submit half of wake verification: a swallowed Enter leaves the wake line — or
+    just a tail of it, e.g. '❯ atch' / '❯ inbox' — staged on the LAST prompt line of the
+    capture while the pane sits idle. Whitespace-collapsed substring matching catches
+    full and partial remnants alike. A menu cursor line ('❯ 1. Yes') is not a substring
+    of the wake text, so a permission dialog raised by a successful submit does not read
+    as staged.
+    """
+    sent = re.sub(r"\s+", "", text)
+    if not sent:
+        return False
+    for line in reversed(capture_text.splitlines()):
+        stripped = line.strip()
+        if not stripped or stripped[0] not in _PROMPT_CHARS:
+            continue
+        staged = re.sub(r"\s+", "", stripped[1:])
+        return bool(staged) and staged in sent
+    return False
+
+
 def wake_pane(session: str, role: str, text: str) -> bool:
     """Inject a nudge into the role's pane and submit it. Returns True only if VERIFIED.
 
     The live half of a dispatch: a Claude pane cannot poll its own inbox, so it sits idle
     until keystrokes are fed in. A naive send is unreliable — if the pane is mid-render
     (Claude's "recap"/spinner state) the keystrokes can be dropped silently. So we clear
-    the input line, type the text, then CONFIRM it actually landed (capture-pane) before
-    pressing Enter; if it didn't land we clear and retry once. Returning False here makes
-    the dispatch's `woke` flag mean "verified delivered", not just "send-keys ran".
+    the input line, type the text (chunked with pacing so paste detection doesn't eat
+    the trailing Enter), CONFIRM it landed (capture-pane), press Enter — then CONFIRM
+    the submit too: a swallowed Enter leaves the wake staged at the prompt and the lead
+    idle forever, which is invisible to callers if `woke` lies. Each half retries once.
+    Returning True means verified typed AND submitted; anything less is False so the
+    dispatch's `woke` flag stays honest and callers can react.
     """
     if not session:
         return False
@@ -284,11 +318,16 @@ def wake_pane(session: str, role: str, text: str) -> bool:
         return False
     for _ in range(2):
         subprocess.run(["tmux", "send-keys", "-t", pane, "C-u"], check=False)  # clear stale input
-        subprocess.run(["tmux", "send-keys", "-t", pane, "--", text], check=False)
+        for i in range(0, len(text), _TYPE_CHUNK):
+            subprocess.run(["tmux", "send-keys", "-t", pane, "--", text[i:i + _TYPE_CHUNK]], check=False)
+            time.sleep(0.05)
         time.sleep(0.4)
         if _injected_text_present(_tmux_capture(pane), text):
-            subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"], check=False)
-            return True
+            for _ in range(2):
+                subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"], check=False)
+                time.sleep(0.5)
+                if not _staged_remnant(_tmux_capture(pane), text):
+                    return True
         subprocess.run(["tmux", "send-keys", "-t", pane, "C-u"], check=False)  # drop failed attempt
         time.sleep(0.3)
     return False
