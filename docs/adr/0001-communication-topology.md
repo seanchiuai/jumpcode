@@ -1,5 +1,12 @@
 # Communication Topology
 
+> **Still in force (as of [ADR 0008](0008-native-claude-code-orchestration.md)).** Hub-and-spoke
+> is now *enforced by the substrate*: native subagents return to the orchestrator and cannot
+> address each other. "Human types into a pane" reads as "Sean addresses any agent"; a lead's
+> relay request is a message to the orchestrator. Below, read *dispatch/mail* as *spawn /
+> SendMessage / return*.
+
+
 The jumpcode uses a strict hub-and-spoke topology with the orchestrator as the hub, chosen over a free mesh so that all coordination has one accountable point and the message graph stays legible as agents multiply.
 
 ## The graph

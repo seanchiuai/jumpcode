@@ -1,5 +1,11 @@
 # Session Revive Primitive
 
+> **SUPERSEDED (2026-07-17) by [ADR 0008](0008-native-claude-code-orchestration.md).** The
+> custom `revive` verb and per-workspace session manifest are retired in favor of native
+> `claude --resume`. The intent — reopen a session with its prior reasoning intact — survives;
+> only the custom implementation is gone. Kept for history.
+
+
 A workspace can be reopened **resumed** — each claude role reconnecting to the session it
 last ran under — via a dedicated `revive` verb, not just launched fresh. This refines (does
 not overturn) ADR 0004.

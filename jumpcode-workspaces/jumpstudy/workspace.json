@@ -1,14 +1,13 @@
 {
-  "title": "JumpStudy AI — define MVP + big-picture build plan",
+  "title": "JumpStudy AI \u2014 define MVP + big-picture build plan",
   "_comment": "General workspace to build the backbone + MVP of JumpStudy AI (an AI tutoring app: Next.js 16 + React 19 + Convex + Clerk + OpenAI Realtime voice + Canvas artifacts). Orchestrator's first job: clearly define what the app needs and how to build it, then produce a big-picture implementation plan for the MVP. FINAL STATE: a documented requirements + architecture definition and a big-picture implementation plan, broken into GitHub issues. SYSTEM OF RECORD: GitHub issues in Jumpsy/JumpStudy-AI via gh (enforced by the orchestrator overlay). REPO: /Users/seanchiu/Desktop/JumpStudy-AI (origin git@github.com:Jumpsy/JumpStudy-AI.git, branch main). WORKTREE: .worktrees/jumpstudy on branch jumpstudy (base main). SESSION: macbook-jumpstudy. ROSTER: central base set (backend/frontend/qa/devops/code-review). Active core for the planning phase is backend-lead + frontend-lead + qa-lead; devops-lead and code-review-lead are deferred until the architecture is frozen.",
-  "workspace_root": "/Users/seanchiu/Desktop/JumpStudy-AI/.worktrees/jumpstudy",
-  "enabled_roles": ["backend-lead", "frontend-lead", "qa-lead", "devops-lead", "code-review-lead"],
-  "role_runtimes": {
-    "orchestrator": "claude",
-    "backend-lead": "claude",
-    "frontend-lead": "claude",
-    "qa-lead": "claude",
-    "devops-lead": "claude",
-    "code-review-lead": "claude"
-  }
+  "worktree": "/Users/seanchiu/Desktop/JumpStudy-AI/.worktrees/jumpstudy",
+  "tracker": "github-issues",
+  "team": [
+    "backend-lead",
+    "frontend-lead",
+    "qa-tester",
+    "devops-lead",
+    "code-reviewer"
+  ]
 }

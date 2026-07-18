@@ -1,5 +1,11 @@
 # Dispatch: Live Delivery + Durable Log
 
+> **SUPERSEDED (2026-07-17) by [ADR 0008](0008-native-claude-code-orchestration.md).** The
+> dispatch CLI, keystroke wake, and JSONL dispatch log are retired. Their jobs are now done by
+> the Agent tool + `SendMessage` (delivery/continuation), the Agent view (monitoring), and
+> GitHub Issues + git state (durable continuity). Kept for history.
+
+
 Inter-actor communication is modeled as a **dispatch**: a single action that both (1) delivers live by injecting a prompt into the recipient's Claude pane so it gets to work immediately, and (2) appends one line to a durable, append-only log. Chosen over fire-and-forget injection (no record) and over a passive check-your-inbox mailbox.
 
 ## Why both halves

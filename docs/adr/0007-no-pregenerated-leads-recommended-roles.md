@@ -1,5 +1,12 @@
 # No Pre-Generated Leads — Central Roles Are Recommendations
 
+> **SUPERSEDED (2026-07-17) by [ADR 0008](0008-native-claude-code-orchestration.md).** The
+> `discover_roles` engine, `enabled_roles`, `role_runtimes`, and overlay-charter mechanics are
+> retired. The *spirit* is now native and stronger: a team is simply the subset of
+> `.claude/agents/*.md` specialists the orchestrator chooses to spawn — nothing runs without a
+> reason to. Kept for history.
+
+
 Status: **Accepted** (2026-06-27). **Refines the role-discovery model** (the "central base set always launches" behavior described in earlier docs).
 
 A workspace launches the **orchestrator alone** by default. There are **no pre-generated leads**. The central `roles/*.md` leads (backend / frontend / qa / devops / code-review) are *recommendations*, not a forced base set. A lead joins a team only when the workspace asks for it, from one of two opt-in sources:

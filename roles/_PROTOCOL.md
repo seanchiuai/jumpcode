@@ -1,193 +1,103 @@
 # Shared Protocol — How Jumpcode Agents Interact
 
-Every charter in this folder points here. These rules are common to all roles; the
-role files only add what is specific to a role. Canonical terms live in
-`$JUMPCODE_HOME/CONTEXT.md`; the reasoning behind these rules lives in `$JUMPCODE_HOME/docs/adr/`.
+Every specialist agent definition and the orchestrator charter point here. These rules are
+common to all roles; the role files add only what is specific to a role. Canonical terms live
+in `CONTEXT.md`; the reasoning lives in `docs/adr/`.
 
 ## The one mental model
 
-> The Human (Sean) drives the **orchestrator**, which commands its **team leads**, which
-> invoke general **subagents** as a tool. **Projects and tasks live in GitHub issues.** The
-> jumpcode only moves messages between visible panes and remembers what was said.
+> Sean drives the **orchestrator** (his main Claude Code session), which spawns **specialist
+> subagents** with the Agent tool and continues them with **SendMessage**. **Projects and
+> tasks live in GitHub Issues.** The runtime moves work between agents and holds their live
+> transcripts; GitHub holds the durable truth.
 
-## Where work lives: GitHub issues, not here
+## Where work lives: GitHub Issues, not here
 
 - A **project** is a GitHub repo/milestone; a **task** is a GitHub issue. Read and update them
-  with the `gh` CLI. There is **no local task registry** — do not look for `task`,
-  `run`, or `status` registries; they were retired (ADR 0006).
-- "Done" is informal: update the GitHub issue and report via dispatch. There is no
-  machine "completion" gate — so the discipline is on you: confirm the acceptance
-  criteria *before* you build (see "Confirm the target before building") and report your
-  result against them.
+  with the `gh` CLI. There is **no local task registry** (ADR 0006).
+- **Never invent or auto-create a repo.** File issues in the workspace's own repo only. If a
+  repo is unspecified, **stop and ask** (a specialist asks the orchestrator; the orchestrator
+  asks Sean).
+- "Done" is informal: there is no machine completion gate. So confirm the acceptance criteria
+  *before* you build and report your result against them.
 
-## Which repo an issue belongs to
+## Spawning and continuing agents (the native channel)
 
-- **Never invent or auto-create a repo.** Issues are filed in **existing** repos only —
-  the workspace's own repo.
-- The repo for a task is **specified by the Human/orchestrator** — normally
-  via the dispatch's `--project <owner/repo>` / `--task #NN`. If you need to
-  create an issue and **no repo is specified, STOP and ask** (a lead asks the
-  orchestrator; the orchestrator asks Sean). Do **not** guess a repo.
+- The orchestrator **spawns** a specialist with the Agent tool, passing the task, its
+  acceptance criteria, and the issue number. The specialist runs (in the background by
+  default) and **returns its report as its final message**.
+- The orchestrator **continues** a running or finished specialist with **`SendMessage`**
+  (addressing it by agent id or name) — a nudge, correction, or next step. The agent already
+  holds its context; there is no keystroke injection and no inbox to poll.
+- **Monitor** the team with the Agent view (`claude agents`, `--json`, `claude logs <id>`).
 
-## Dispatch: the only channel
+## Confirm the target before building
 
-A **dispatch** is one directed message that does two things at once (ADR 0002): it is
-**delivered live** (injected into the recipient's pane so it starts immediately) and
-**appended to the durable dispatch log**. Send one with:
+Before you start a task, state — back to the orchestrator or in the GitHub issue — the
+**acceptance criteria** you will treat as "done": the observable condition that means the task
+is complete. Pull it from the issue (`gh issue view`) or the task you were handed. If you
+cannot find or derive clear, checkable criteria, **do not start building** — return a blocked
+report asking to make "done" concrete first. This binds every role: never make a speculative
+choice and call it done.
 
-```bash
-$JUMPCODE_HOME/bin/dispatch send \
-  --from <your-role> --to <recipient-role> \
-  [--project <owner/repo>] [--task #NN] \
-  [--subject "<short subject>"] \
-  [--kind request|reply|report-done|report-blocked|notice] \
-  "<body>"
-```
+## Reporting
 
-- Default `--kind` is `request`. Use `reply` to answer one, `notice` for FYI.
-- `--no-wake` logs without injecting (for scripted/batch use); normal sends always wake.
+A specialist's **returned final message is its report.** Make it explicit — done or blocked —
+and also reflect the outcome in the GitHub issue:
 
-### On a wake
+- **Done:** summary; what changed; checks run; open concerns; recommended next step.
+- **Blocked:** the blocker; why; what you tried; what you need from the orchestrator.
 
-When your pane is woken, a one-line nudge appears. Read the full message:
+Do not assume a passing test alone counts as a report; state the verdict against the criteria
+you confirmed.
 
-```bash
-$JUMPCODE_HOME/bin/dispatch inbox <your-role>      # everything addressed to you
-$JUMPCODE_HOME/bin/dispatch show <dispatch-id>     # one message in full
-```
+## The browser boundary (hard)
 
-You cannot poll your own inbox unprompted — you act when woken. After finishing a
-unit of work, **always send a report dispatch** so the sender knows; do not assume a
-chat message alone counts.
+- **Only the reviewer (`code-reviewer`) and tester (`qa-tester`) drive a browser** — Claude in
+  Chrome (`mcp__claude-in-chrome__*`) or Playwright. They own **all** browser automation:
+  rendered/public output, e2e, and smoke flows.
+- **Coding leads are denied the browser MCP servers** in their agent definitions — the runtime
+  blocks it. If a lead's task needs browser verification, it flags that in its report for the
+  orchestrator to route to the reviewer or tester.
+- **The orchestrator never drives a browser.** It is the main session, so this is a behavioral
+  rule (context hygiene), not a permission — it always delegates browser work.
 
-### Confirm the target before building
+## Never sit on an interactive prompt
 
-Before you start work on a `request`, state — in one line back to the sender, or in the
-GitHub issue — the **acceptance criteria** you will treat as "done": the observable
-condition that, once true, means this task is complete. Pull it from the issue
-(`gh issue view`) or from the dispatch body.
+Specialists run unattended. Do not open a blocking question UI, enter plan-approval mode, or
+stop on a yes/no confirm — nothing will press a key. When you would ask a question, **put it in
+your report** instead (a specialist to the orchestrator; the orchestrator to Sean), state your
+best-guess default, and keep going on anything not blocked by it. Prefer decide-and-note for
+low-risk, reversible choices; reserve questions for genuine decision gates.
 
-If you cannot find or derive clear, checkable criteria, **do not start building** — send a
-`reply` (or `report-blocked`) asking the sender to make "done" concrete first. A lead asks
-the orchestrator; the orchestrator asks Sean. Declaring the target up front is cheaper than
-discovering at report-time that you built to the wrong one.
-
-This is the shared form of the orchestrator's **"do not guess your way through unclear
-work"** rule — it binds **every role**. If the intended behavior, scope, or done-condition
-is unclear, resolve it before writing code; never make a speculative choice and call it
-done. When you report, report your result *against* the criteria you confirmed here.
-
-### Reporting
-
-When a task is done or stuck, send a dispatch back to whoever assigned it **and**
-update the GitHub issue. **Always pass `--reply-to <the request's dispatch-id>`** (the id
-shown when the request was sent / in `dispatch inbox`): it is what lets `dispatch status`
-pair your report to its request precisely and close the open loop. Without it, status
-falls back to matching by `--task`, which can't tell two open requests on the same issue
-apart.
-
-```bash
-# done
-$JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator \
-  --kind report-done --task #NN --reply-to <REQUEST-DISPATCH-ID> \
-  "Summary; what changed; checks run; open concerns; recommended next step."
-
-# blocked
-$JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator \
-  --kind report-blocked --task #NN --reply-to <REQUEST-DISPATCH-ID> \
-  "Blocker; why; what you tried; what you need from the orchestrator."
-```
-
-## Never sit on an interactive prompt — you have no human at your pane
-
-Your pane runs unattended: **no human is watching it to press a key.** Any interactive UI
-that blocks waiting for input will hang you forever, and a dispatch sent into a hung pane
-lands *inside the prompt* — selecting a wrong default or corrupting the modal. So:
-
-- **Never open a blocking question UI.** Do not use interactive multiple-choice question
-  prompts, do not enter a plan-approval mode, and do not stop on a yes/no confirm. These
-  expect a keypress you will never receive.
-- **Permission/approval modals should not appear** — panes launch non-interactive
-  (`--permission-mode auto` / `--yolo`). If you somehow reach one, treat being
-  stuck on it as a blocker, not a question to wait on.
-- **When you would ask a question, dispatch it instead.** Route it through the channel:
-  a lead sends `--kind report-blocked` (or `reply`) to the **orchestrator**; the
-  orchestrator escalates to **Sean**. State the question and your best-guess default in the
-  dispatch body, then keep going on anything not blocked by it. A dispatch reaches a human;
-  a modal on your pane does not.
-- **Prefer decide-and-note over asking.** If the choice is low-risk and reversible, make the
-  best call, record the assumption in the GitHub issue or your report, and proceed. Reserve
-  dispatched questions for genuine decision gates (scope, product direction, risky/
-  irreversible steps) — the same bar as "Confirm the target before building" above.
-
-## Topology — who may talk to whom (ADR 0001)
+## Topology — who talks to whom (ADR 0001)
 
 ```text
-Human (Sean) -> orchestrator, any team lead    (Human can type into any pane)
-orchestrator -> any team lead, Human (Sean)    (reports go to Sean only)
-team lead    -> orchestrator only
-team lead    -> its own subagents (a tool, not a pane)
+Sean (Human) -> orchestrator, any specialist   (Sean can address any agent)
+orchestrator -> any specialist                  (spawn / SendMessage)
+orchestrator -> Sean                             (reports go to Sean only)
+specialist   -> orchestrator                     (returns its report)
+specialist   ✗  specialist                       (no direct channel — ask the orchestrator to relay)
 ```
 
-- **No lead ↔ lead.** To reach another lead, send the orchestrator a dispatch asking it
-  to **relay**. The orchestrator decides whether to forward.
-- The Human (Sean) never addresses subagents directly.
+Native subagents cannot address each other, so hub-and-spoke is enforced by the substrate. A
+specialist that needs another asks the orchestrator to **relay**. Hub-and-spoke is the default;
+for a tiny task the orchestrator may work inline (it is optional, not mandatory).
 
-## Continuity: always fresh (ADR 0004)
+## Continuity & recovery (ADR 0004 / 0008)
 
-Panes launch as clean Claude agents with no session resume. When a workspace reopens,
-you have **no memory** of the prior session. Reconstruct context from the durable
-sources: **GitHub issues** (what the work is) and the **dispatch log** (what was said):
+A fresh session has no memory of a prior one. Reconstruct from durable sources only — never
+from ephemeral agent state (the Task tools' state is session-local, not truth):
 
-```bash
-$JUMPCODE_HOME/bin/dispatch log 40
-```
+1. `gh issue list` / `gh issue view` — what the work is and how far it got.
+2. Git state — `git status`, `git log`, `gh pr list` / `gh pr view` — what is built and in
+   review.
+3. `claude --resume` when restoring an agent's own prior reasoning is worth more than a clean
+   slate.
 
-## Health checks & subagent visibility
+## Guardrails
 
-Sean or the orchestrator can snapshot the whole team at any time:
-
-```bash
-$JUMPCODE_HOME/bin/health          # per-role: alive/stopped · working/waiting/idle · last-seen · subagents
-$JUMPCODE_HOME/bin/health --json   # same, machine-readable
-$JUMPCODE_HOME/bin/peek <role> [n] # read-only view of one role's pane (never wakes it)
-```
-
-`health` is the whole-team snapshot; `peek` reads a single pane's recent output when you
-need to see *what* a lead is actually doing (mid-work, idle, errored, crashed). The
-orchestrator uses `peek` to monitor and recover — see its charter.
-
-`health` reads liveness and busy/idle state from your tmux pane directly. But your
-**subagents run in-process** and are invisible from outside — so leads must self-report
-them. When you spawn or finish a subagent, send a `notice` whose subject follows this
-exact convention:
-
-```bash
-$JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator --kind notice \
-  --subject "subagent:start <name>" "why you're spawning it"
-# ...and when it's done:
-$JUMPCODE_HOME/bin/dispatch send --from <your-role> --to orchestrator --kind notice \
-  --subject "subagent:end <name>" "result summary"
-```
-
-`health` counts `start` minus `end` per role, so an unmatched `start` shows as an active
-subagent. Keep names stable between the start and end so they pair up.
-
-### Runtime note (Claude Code vs Codex)
-
-Leads behave identically regardless of which runtime fills their pane (set per role via
-`role_runtimes` in the workspace config). Two caveats:
-
-- **Subagents are optional.** A Codex lead may not spawn subagents the way Claude Code
-  does. The `subagent:start`/`subagent:end` self-report convention is advisory — absence
-  of subagents is normal, not an error.
-- **GitHub access depends on the `gh` CLI.** GitHub issues are the system of record. A Codex
-  lead can only read/update issues if the `gh` CLI is authenticated in its environment.
-  If yours is not, report progress via `dispatch` and let the orchestrator make
-  the GitHub writes.
-
-## Guardrails are soft (v1)
-
-Your charter names the territory you own and what to leave alone. These are
-**advisory** — not enforced by permissions. The convention: stay in your domain, and
-relay cross-domain work through the orchestrator rather than reaching across.
+Your role file names the territory you own and what to leave alone. Stay in your domain and
+relay cross-domain work through the orchestrator. The **browser boundary above is enforced**
+for coding leads (denied in frontmatter); the territory boundaries are conventions — honor
+them.

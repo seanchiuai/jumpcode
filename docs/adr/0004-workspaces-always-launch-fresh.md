@@ -1,5 +1,12 @@
 # Workspaces Always Launch Fresh
 
+> **SUPERSEDED at the mechanism level (2026-07-17) by [ADR 0008](0008-native-claude-code-orchestration.md).**
+> The *principle* stands — continuity comes from durable sources, not restored agent memory —
+> but the durable source is now GitHub Issues + git state, not the dispatch log, and "fresh
+> launch" is just starting a Claude Code session. Native `claude --resume` (see ADR 0005) is the
+> opt-in resume path. Kept for history.
+
+
 Launching a workspace always starts clean Claude agents with the same saved config. There is no session resume. Closing a workspace closes the window; reopening it is a fresh start.
 
 ## Why

@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# jumpcode-install — deliver the jumpcode agent pack where Claude Code discovers it.
+#
+# Native agent discovery reads <cwd>/.claude/agents/ and ~/.claude/agents/ — it never
+# looks inside .jumpcode/. So this repo is the canonical SOURCE of the pack, and adoption
+# copies it to a discoverable location (see docs/adr/0008). This is the only jumpcode
+# script; the retired tmux/dispatch/wake infrastructure is gone.
+#
+# Usage:
+#   bin/jumpcode-install --project <worktree>   # copy into <worktree>/.claude/agents (recommended per workspace)
+#   bin/jumpcode-install --user                 # copy into ~/.claude/agents (permanent personal team)
+#   bin/jumpcode-install --project <worktree> --link   # symlink instead of copy (source stays authoritative)
+#
+# It installs the five specialist agents (.claude/agents/*.md) plus the orchestrator charter
+# and shared protocol (roles/orchestrator.md, roles/_PROTOCOL.md) and CONTEXT.md, so a fresh
+# session rooted at the target can read all of them.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # the .jumpcode repo root
+MODE=""
+DEST_ROOT=""
+LINK=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --project) MODE="project"; DEST_ROOT="${2:-}"; shift 2 ;;
+    --user)    MODE="user"; shift ;;
+    --link)    LINK=1; shift ;;
+    -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [ "$MODE" = "user" ]; then
+  DEST_ROOT="$HOME"
+elif [ "$MODE" = "project" ]; then
+  [ -n "$DEST_ROOT" ] || { echo "--project needs a target directory" >&2; exit 2; }
+  [ -d "$DEST_ROOT" ] || { echo "target does not exist: $DEST_ROOT" >&2; exit 2; }
+else
+  echo "specify --project <dir> or --user (see --help)" >&2; exit 2
+fi
+
+AGENTS_DEST="$DEST_ROOT/.claude/agents"
+mkdir -p "$AGENTS_DEST"
+
+place() {  # place <src> <dest>
+  local src="$1" dest="$2"
+  if [ "$LINK" -eq 1 ]; then
+    ln -sf "$src" "$dest"
+  else
+    cp "$src" "$dest"
+  fi
+}
+
+for f in "$HERE"/.claude/agents/*.md; do
+  place "$f" "$AGENTS_DEST/$(basename "$f")"
+done
+
+# Orchestrator charter + protocol + glossary: the main session reads these; keep them next
+# to the agents under .claude/agents/jumpcode/ so a fresh session can find them.
+REF_DEST="$AGENTS_DEST/jumpcode"
+mkdir -p "$REF_DEST"
+place "$HERE/roles/orchestrator.md" "$REF_DEST/orchestrator.md"
+place "$HERE/roles/_PROTOCOL.md"    "$REF_DEST/_PROTOCOL.md"
+place "$HERE/CONTEXT.md"            "$REF_DEST/CONTEXT.md"
+
+echo "Installed jumpcode pack -> $AGENTS_DEST"
+echo "  agents:  $(ls "$HERE"/.claude/agents/*.md | wc -l | tr -d ' ') specialist definitions"
+echo "  charter: $REF_DEST/orchestrator.md (orchestrator reads this at kickoff)"
+echo "  protocol:$REF_DEST/_PROTOCOL.md"
+if [ "$LINK" -eq 1 ]; then echo "  (symlinked — the .jumpcode source stays authoritative)"; fi

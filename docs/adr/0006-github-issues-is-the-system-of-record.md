@@ -2,6 +2,12 @@
 
 Status: **Accepted** (2026-06-17). **Supersedes the prior system-of-record decision.**
 
+> **Still in force (as of [ADR 0008](0008-native-claude-code-orchestration.md)).** GitHub Issues
+> remains the system of record. What changed under 0008: "visible-pane orchestration" is now
+> native subagents, "wake/dispatch delivery" is the Agent tool + `SendMessage`, and the
+> "dispatch log" is retired — continuity now rests on GitHub Issues + git state alone. The
+> runtime's own agent/task state is ephemeral and is never treated as truth.
+
 Projects and tasks live in **GitHub issues**, not in the jumpcode. A task is a GitHub issue in the relevant repo; an issue number (`#42`) is its id. The orchestrator reads/writes them via the **`gh` CLI**. The jumpcode deliberately keeps **no** local project/task/run registry.
 
 ## Why

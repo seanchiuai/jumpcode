@@ -1,5 +1,8 @@
 state/
 shared/
+# Local Claude Code settings stay machine-local; the shared agent pack under
+# .claude/agents/ IS committed.
+.claude/settings.local.json
 # Real workspaces are never committed — only the example template ships in this repo.
 # A real workspace lives in its own project repo (with its own .jumpcode/roles/).
 workspaces/*

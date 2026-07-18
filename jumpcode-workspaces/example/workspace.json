@@ -1,6 +1,9 @@
 {
-  "_comment": "Example workspace (settings-only). workspace_root resolves relative to the jumpcode's parent dir — point it at your project repo. Only the orchestrator launches by default — there are no pre-generated leads. 'enabled_roles' opts in the recommended central leads you want (omit/[] = orchestrator only); overlay charters under <workspace_root>/.jumpcode/roles/ launch automatically. role_runtimes overrides a launched role's runtime, e.g. {\"backend-lead\": \"codex\"}.",
-  "workspace_root": "workspaces/example",
-  "enabled_roles": ["backend-lead", "frontend-lead", "qa-lead", "devops-lead"],
-  "role_runtimes": {}
+  "title": "Example workspace — config-only reference",
+  "_comment": "A workspace is a goal bound to a repo worktree plus the team of specialists the orchestrator will spawn. This file is a lightweight, human-readable record of that binding — it is NOT read by any engine (there is no launcher). To run: install the agent pack into the worktree (bin/jumpcode-install --project <worktree>), start Claude Code there as the orchestrator, point it at roles/orchestrator.md, and hand it the goal. 'team' names which .claude/agents specialists this goal expects; the orchestrator spawns them as needed. 'tracker' defaults to GitHub Issues (ADR 0006).",
+  "repo": "owner/repo",
+  "worktree": "~/Desktop/<repo>/.worktrees/<slug>",
+  "base_branch": "staging",
+  "tracker": "github-issues",
+  "team": ["backend-lead", "frontend-lead", "devops-lead", "code-reviewer", "qa-tester"]
 }

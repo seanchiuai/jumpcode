@@ -1,59 +1,105 @@
 # Jumpcode
 
-The local, file-based multi-agent orchestration system for `workspace-macbook`. Sean (the Human) drives a workspace's orchestrator, which commands its team leads, which invoke general subagents as tools. Projects and tasks live in GitHub issues; the jumpcode owns the visible panes, dispatch delivery, the dispatch log, and workspace config.
+A behavioral contract for multi-agent software delivery, expressed as native Claude Code agent
+definitions. Sean drives a workspace's orchestrator (his main session), which spawns specialist
+subagents and continues them with `SendMessage`. Projects and tasks live in GitHub Issues;
+Claude Code's runtime provides the orchestration substrate (subagents, Agent view, worktrees,
+resume).
 
 ## Language
 
 **Project**:
-A collection of tasks sharing one goal (e.g. "set up MCP"), tracked as a **GitHub repo/milestone**. A workspace can have several active at once; its orchestrator interleaves them. The jumpcode does **not** maintain its own project registry — GitHub issues are the system of record (see ADR 0006).
+A collection of tasks sharing one goal, tracked as a **GitHub repo/milestone**. A workspace can
+have several active at once; its orchestrator interleaves them. Jumpcode keeps **no** project
+registry — GitHub Issues are the system of record (ADR 0006).
 _Avoid_: run, registry
 
 **Task**:
-A unit of work — a **GitHub issue**. Lives in GitHub, not the jumpcode. The orchestrator reads/writes it via the `gh` CLI.
+A unit of work — a **GitHub issue**. Lives in GitHub, not Jumpcode. Read/written via the `gh`
+CLI.
 _Avoid_: ticket
 
 **Workspace**:
-A named, saved, reusable configuration bound to a repo — one orchestrator plus multiple team leads and their prompts/agent config. A repo can hold multiple workspaces, but in practice usually one; concurrency lives at the project level (one workspace's orchestrator can work several projects at once), not the workspace level. There are no templates: you create a new workspace from scratch or by copying an existing one. The workspace *is* the saved config; launching it brings it to life as visible panes — there is no separate noun for the running instance. Launching always starts **fresh**: clean Claude agents with the same config, no session resume. Closing a workspace closes the window; the saved config persists. Agents orient from GitHub issues + the dispatch log, never from prior agent memory. A workspace does **not** bind to a single repo as its tracker: the orchestrator has general `gh` access and is told which repo each task belongs to. Created fresh or by copying an existing workspace (no templates).
-_Avoid_: project, session, template, instance
+A goal bound to a repo and a git worktree (`<repo>/.worktrees/<slug>`), plus the installed agent
+pack the orchestrator commands. There is no saved-config engine and no launcher: a workspace is
+brought to life by starting Claude Code in the worktree (that session is the orchestrator) with
+the pack installed. Agents orient from GitHub Issues + git state, never from prior agent memory.
+_Avoid_: session, template, instance, run
 
 **Repo**:
-The codebase a workspace operates on. One repo can have multiple workspaces.
+The codebase a workspace operates on. One repo can host multiple workspaces (worktrees).
 
 ## Roles
 
 **Orchestrator**:
-The single accountable agent in a workspace. Receives goals from Sean, decomposes them into tasks, commands all team leads, and is the only relay between leads. One per workspace; a visible pane.
+The single accountable agent — Sean's **main Claude Code session**, rooted in the target
+worktree. Receives goals from Sean, decomposes them into GitHub Issues, spawns and commands
+specialists, and is the only relay between them. Non-coding; never drives a browser. Not a
+subagent — governed by `roles/orchestrator.md`, which the session reads at kickoff.
 
-**Team Lead**:
-A durable accountable agent owning a discipline that is **specific to the repo** (e.g. backend lead, frontend lead, MCP lead, qa lead). A visible CLI pane, run without `-p` so Human can see and interact with it. Receives commands from the orchestrator, reports back, and may request the orchestrator relay to another lead; cannot talk to other leads directly. Has its own charter doc (CLAUDE.md-style) defining its domain, how it interacts with the orchestrator, and its guardrails. Invokes subagents as a tool.
-_Avoid_: specialist (do not call a lead a "backend specialist" — it is the backend **lead**)
+**Specialist** (coding lead / reviewer / tester):
+A named accountable subagent defined in `.claude/agents/*.md`, spawned by the orchestrator with
+the Agent tool for a scoped task. Owns a territory, returns a done/blocked report, and cannot
+address another specialist (it asks the orchestrator to relay). The coding leads
+(`backend-lead`, `frontend-lead`, `devops-lead`) build; the **reviewer** (`code-reviewer`) is
+the independent merge-gate; the **tester** (`qa-tester`) is independent verification.
+_Avoid_: pane, team lead pane
 
-**Subagent**:
-A **general, repo-agnostic** Claude Code subagent (e.g. code reviewer) that a team lead invokes as a tool to help with a task. Ephemeral, not a pane, not an accountability layer, no `-p`. The Human (Sean) never addresses subagents directly. This is what was loosely called a "specialist".
-_Avoid_: specialist
+**Reviewer / Tester (browser owners)**:
+`code-reviewer` and `qa-tester` are the **only** agents that drive a browser (Claude in Chrome /
+Playwright). They own all browser automation — rendered/public output, e2e, smoke flows.
 
 **Relay**:
-The pattern by which one lead reaches another: it asks the orchestrator, which decides whether to forward. There is no direct lead-to-lead channel.
+The pattern by which one specialist reaches another: it asks the orchestrator, which decides
+whether to forward. There is no direct specialist-to-specialist channel — native subagents
+cannot address each other.
 
 ## Communication
 
-**Dispatch**:
-A directed message from one actor to another. A single dispatch does two things at once: it is delivered live (a prompt injected into the recipient's pane so it gets to work immediately) and it is written to the durable dispatch log. The unified replacement for "mail".
-_Avoid_: mail, message
+**Spawn**:
+The orchestrator starting a specialist with the Agent tool, handing it the task, acceptance
+criteria, and issue number. The specialist runs (background by default) and returns its report
+as its final message.
 
-**Dispatch log**:
-The durable, append-only record of every dispatch. Survives context compaction and lets a lost agent — or Sean — reconstruct what was asked and what happened. Recovery/review tool, not the primary delivery path.
+**SendMessage**:
+The native tool the orchestrator uses to continue a running or finished specialist — a nudge,
+correction, or next step — addressing it by agent id or name. The specialist already holds its
+context; there is no keystroke injection and no inbox to poll.
+_Avoid_: dispatch, mail, wake
 
-**Wake**:
-The live half of a dispatch: a keystroke injection into the recipient's idle Claude pane (targeted by its stable `@role` border label). Necessary because a Claude agent cannot poll its own inbox; it sits idle until something feeds it input.
+**Report**:
+A specialist's returned final message — explicitly *done* (summary, what changed, checks run,
+concerns, next step) or *blocked* (blocker, why, what was tried, what it needs) — mirrored to
+the GitHub issue.
+
+**Agent view / FleetView**:
+The native monitor (`claude agents`, `--json`, `claude logs <id>`, `claude attach <id>`) showing
+which specialists are working / idle / done / failed. Replaces the retired `health`/`peek`/
+`fleet` pane monitors.
+
+## Continuity
+
+**Durable truth**:
+GitHub Issues (what the work is) + git/PR state (what is built). The runtime's agent/task state
+(`~/.claude/jobs/<id>/state.json`) is ephemeral and session-local — never treated as truth.
+
+**Recovery**:
+A fresh session rebuilds from `gh issue view` + `git`/`gh pr` state; `claude --resume` restores
+a prior session when its own reasoning is worth keeping.
 
 ## Configuration
 
-**Charter**:
-A team lead's own thin CLAUDE.md-style doc with four sections: (1) identity + domain, (2) editable territory & guardrails, (3) domain conventions, (4) a pointer to the shared protocol. The common interaction rules (dispatch/report/relay/wake/CLI) live once in the shared protocol, not duplicated per lead. One charter per team lead; written/copied when the workspace is created.
+**Agent definition**:
+A `.claude/agents/*.md` file: YAML frontmatter (`name`, `description`, `tools` /
+`disallowedTools`, `color`) + a Markdown system prompt. The `tools`/`disallowedTools` lists
+**enforce** the browser boundary. This is the native replacement for the old per-lead charter.
 
 **Shared protocol**:
-The single doc holding the interaction rules common to all leads (how to receive a dispatch, report DONE/BLOCKED, request a relay, the wake mechanism, CLI usage). Referenced by every charter so the rules live in one place and never drift.
+`roles/_PROTOCOL.md` — the interaction rules common to every role (spawn/report/relay, the
+browser boundary, confirm-the-target, recovery). Referenced by every agent so the rules live in
+one place.
 
 **Guardrails**:
-The constraints in a lead's charter — editable vs off-limits areas, dos and don'ts. **Soft (advisory) in v1**: stated in the charter, not enforced by Claude Code permissions. Hard enforcement (deny rules / hooks) is a later option. The convention: a lead stays in its domain and relays cross-domain work through the orchestrator.
+Territory boundaries in an agent's definition. The **browser boundary is enforced** (frontmatter
+tool lists); the territory (which paths a lead edits) is a convention the agent honors and relays
+across through the orchestrator.

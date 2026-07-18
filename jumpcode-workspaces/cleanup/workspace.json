@@ -1,14 +1,13 @@
 {
-  "title": "Minds AI cleanup — debloat + verified architectural uplift (1mo)",
-  "_comment": "One-month codebase cleanup of the Minds AI webapp (AI persona platform: create Sparks, chat/voice/video, Flows; prod getminds.ai). Two tiers of change: Tier A = small, safe, non-destructive (dead/duplicate/redundant code, stale comments) shipped as small PRs freely; Tier B = significant architectural improvements to the core webapp loop (anything that is NOT a simple fix), REQUIRING Sean's approval before any build (pause gate): if a change isn't a simple fix, flag it to Sean and wait for his go. SCOPE: production-live code only; primary surface = webapp core loop, secondary = v1 API / MCP / cron / test harnesses (count less). SYSTEM OF RECORD: an HTML tracker backed by a structured findings.json the team writes + renders to HTML (NOT GitHub issues — enforced by the orchestrator overlay). FINAL STATE: discovery report delivered + every finding tiered in the tracker; 0 open Tier A; all Sean-approved Tier B merged; Knip + jscpd gating CI (baseline existing, fail on new); cron monitors scheduled for post-program bad-PR/security watch. REPO: /Users/seanchiu/Desktop/webapp (origin minds-ai-co/webapp). WORKTREE: .worktrees/cleanup on branch cleanup (base staging). SESSION: macbook-cleanup. ROSTER: central base set (backend/frontend/qa/devops/code-review). Tooling: Knip (unused files/exports/deps), jscpd (copy/paste). Tests: pnpm test = vitest run --config vitest.config.unit.ts; pnpm lint. Phases: 0 stand-up -> 1 discovery report + review gate -> 2-3 small-PR execution (A free, B approved-only) -> 4 wrap, flip CI gate on, schedule cron. Created 2026-06-20.",
-  "workspace_root": "/Users/seanchiu/Desktop/webapp/.worktrees/cleanup",
-  "enabled_roles": ["backend-lead", "frontend-lead", "qa-lead", "devops-lead", "code-review-lead"],
-  "role_runtimes": {
-    "orchestrator": "claude",
-    "backend-lead": "claude",
-    "frontend-lead": "claude",
-    "qa-lead": "claude",
-    "devops-lead": "claude",
-    "code-review-lead": "claude"
-  }
+  "title": "Minds AI cleanup \u2014 debloat + verified architectural uplift (1mo)",
+  "_comment": "One-month codebase cleanup of the Minds AI webapp (AI persona platform: create Sparks, chat/voice/video, Flows; prod getminds.ai). Two tiers of change: Tier A = small, safe, non-destructive (dead/duplicate/redundant code, stale comments) shipped as small PRs freely; Tier B = significant architectural improvements to the core webapp loop (anything that is NOT a simple fix), REQUIRING Sean's approval before any build (pause gate): if a change isn't a simple fix, flag it to Sean and wait for his go. SCOPE: production-live code only; primary surface = webapp core loop, secondary = v1 API / MCP / cron / test harnesses (count less). SYSTEM OF RECORD: an HTML tracker backed by a structured findings.json the team writes + renders to HTML (NOT GitHub issues \u2014 enforced by the orchestrator overlay). FINAL STATE: discovery report delivered + every finding tiered in the tracker; 0 open Tier A; all Sean-approved Tier B merged; Knip + jscpd gating CI (baseline existing, fail on new); cron monitors scheduled for post-program bad-PR/security watch. REPO: /Users/seanchiu/Desktop/webapp (origin minds-ai-co/webapp). WORKTREE: .worktrees/cleanup on branch cleanup (base staging). SESSION: macbook-cleanup. ROSTER: central base set (backend/frontend/qa/devops/code-review). Tooling: Knip (unused files/exports/deps), jscpd (copy/paste). Tests: pnpm test = vitest run --config vitest.config.unit.ts; pnpm lint. Phases: 0 stand-up -> 1 discovery report + review gate -> 2-3 small-PR execution (A free, B approved-only) -> 4 wrap, flip CI gate on, schedule cron. Created 2026-06-20.",
+  "worktree": "/Users/seanchiu/Desktop/webapp/.worktrees/cleanup",
+  "tracker": "custom-html-tracker (findings.json → HTML; NOT GitHub Issues — enforced by an orchestrator overlay)",
+  "team": [
+    "backend-lead",
+    "frontend-lead",
+    "qa-tester",
+    "devops-lead",
+    "code-reviewer"
+  ]
 }
